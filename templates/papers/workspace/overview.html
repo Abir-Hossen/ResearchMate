@@ -13,12 +13,21 @@
             <dd class="col-sm-8">{{ file_name }}</dd>
             <dt class="col-sm-4">File Size</dt>
             <dd class="col-sm-8">{{ file_size_display }}</dd>
-            <dt class="col-sm-4">Status</dt>
-            <dd class="col-sm-8">{{ status }}</dd>
+            <dt class="col-sm-4">Processing Status</dt>
+            <dd class="col-sm-8">{{ content_status }}</dd>
         </dl>
+        {% if is_prepared %}
+        <div class="alert alert-success mt-3 mb-0" role="status">
+            Paper is prepared for AI learning.
+        </div>
+        {% endif %}
         <div class="mt-4 d-flex gap-2 flex-wrap">
             <a class="btn btn-primary" href="{{ paper.pdf_file.url }}" target="_blank">View PDF</a>
             <a class="btn btn-outline-secondary" href="{{ paper.pdf_file.url }}" download>Download PDF</a>
+            <form method="post" action="{% url 'start_learning' paper.id %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-primary">Start Learning</button>
+            </form>
         </div>
     </div>
 </div>

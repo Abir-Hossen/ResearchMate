@@ -11,6 +11,7 @@ from .views import (
     paper_quiz,
     paper_sections,
     paper_technical,
+    start_learning_view,
     upload_paper_view,
 )
 
@@ -19,6 +20,7 @@ urlpatterns = [
     path('my-papers/', my_papers_view, name='my_papers'),
     path('delete/<int:pk>/', delete_paper_view, name='delete_paper'),
     path('<int:paper_id>/overview/', paper_overview, name='paper_overview'),
+    path('<int:paper_id>/start-learning/', start_learning_view, name='start_learning'),
     path('<int:paper_id>/beginner/', paper_beginner, name='paper_beginner'),
     path('<int:paper_id>/technical/', paper_technical, name='paper_technical'),
     path('<int:paper_id>/sections/', paper_sections, name='paper_sections'),

@@ -4,7 +4,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import PaperUploadForm
 from .models import Paper
-from .services import build_workspace_context, get_paper_metadata, get_user_paper
+from .services import (
+    build_workspace_context,
+    extract_pdf_content,
+    get_paper_metadata,
+    get_user_paper,
+)
 from .utils import format_file_size
 
 
@@ -56,6 +61,14 @@ def paper_overview(request, paper_id):
     metadata.update(build_workspace_context(request.user, paper_id, 'overview'))
     metadata['file_size_display'] = format_file_size(metadata['file_size'])
     return render(request, 'papers/workspace/overview.html', metadata)
+
+
+@login_required(login_url='login')
+def start_learning_view(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+    extract_pdf_content(paper)
+    messages.success(request, 'Paper is prepared for AI learning.')
+    return redirect('paper_overview', paper_id=paper.id)
 
 
 @login_required(login_url='login')

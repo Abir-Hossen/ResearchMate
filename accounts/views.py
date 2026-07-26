@@ -3,9 +3,16 @@ import datetime
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.shortcuts import redirect, render
 
 from .forms import LoginForm, RegistrationForm
+
+
+def home_view(request):
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+    return redirect('login')
 
 
 def register_view(request):
@@ -28,7 +35,15 @@ def login_view(request):
     if request.method == 'POST':
         form = LoginForm(request.POST)
         if form.is_valid():
-            user = authenticate(request, username=form.cleaned_data['username'], password=form.cleaned_data['password'])
+            identifier = form.cleaned_data['username']
+            password = form.cleaned_data['password']
+            user = authenticate(request, username=identifier, password=password)
+            if user is None:
+                user = authenticate(request, email=identifier, password=password)
+            if user is None:
+                user = User.objects.filter(email__iexact=identifier).first()
+                if user is not None:
+                    user = authenticate(request, username=user.username, password=password)
             if user is not None:
                 login(request, user)
                 messages.success(request, 'Welcome back!')

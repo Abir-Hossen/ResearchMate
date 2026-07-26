@@ -86,3 +86,23 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn('/accounts/login/', response.url)
+
+    def test_login_accepts_email_as_identifier(self):
+        user = User.objects.create_user(username='emailuser', email='emailuser@example.com', password='Secret123')
+        response = self.client.post(
+            reverse('login'),
+            {'username': 'emailuser@example.com', 'password': 'Secret123'},
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse('dashboard'))
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+
+    def test_home_redirects_guests_to_login_and_users_to_dashboard(self):
+        response = self.client.get(reverse('home'))
+        self.assertRedirects(response, reverse('login'))
+
+        user = User.objects.create_user(username='homeuser', email='homeuser@example.com', password='Secret123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('home'))
+        self.assertRedirects(response, reverse('dashboard'))
