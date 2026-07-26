@@ -1,3 +1,5 @@
+import datetime
+
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -46,4 +48,8 @@ def logout_view(request):
 
 @login_required(login_url='login')
 def dashboard_view(request):
-    return render(request, 'accounts/dashboard.html', {'user': request.user})
+    context = {
+        'user': request.user,
+        'today': datetime.date.today(),
+    }
+    return render(request, 'accounts/dashboard.html', context)

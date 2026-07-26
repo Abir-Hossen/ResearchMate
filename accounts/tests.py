@@ -49,6 +49,16 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'already exists')
 
+    def test_authenticated_user_sees_dashboard_sections(self):
+        user = User.objects.create_user(username='dashuser', email='dash@example.com', password='Secret123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Recent Activity')
+        self.assertContains(response, 'Quick Actions')
+        self.assertContains(response, 'Getting Started')
+
     def test_password_mismatch_is_rejected(self):
         response = self.client.post(
             reverse('register'),
