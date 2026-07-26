@@ -66,3 +66,23 @@ class PaperUploadTests(TestCase):
         self.assertFalse(Paper.objects.filter(pk=paper.pk).exists())
         self.assertFalse(paper.pdf_file.storage.exists(paper.pdf_file.name))
         self.assertContains(response, 'Paper deleted successfully')
+
+    def test_workspace_overview_requires_owner_access(self):
+        owner = User.objects.create_user(username='workspaceowner', password='Secret123')
+        other = User.objects.create_user(username='workspaceother', password='Secret123')
+        paper = Paper.objects.create(owner=owner, title='Protected Paper', pdf_file=SimpleUploadedFile('protected.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+
+        self.client.force_login(other)
+        response = self.client.get(reverse('paper_overview', args=[paper.pk]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_workspace_beginner_page_renders_paper_context(self):
+        user = User.objects.create_user(username='workspacebeginner', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Study Paper', pdf_file=SimpleUploadedFile('study.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Study Paper')

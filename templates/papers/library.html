@@ -35,7 +35,7 @@
                         </div>
                     </div>
                     <div class="card-footer bg-white border-0 d-flex justify-content-between align-items-center">
-                        <a class="btn btn-outline-secondary btn-sm" href="{{ paper.pdf_file.url }}" target="_blank">View</a>
+                        <a class="btn btn-outline-primary btn-sm" href="{% url 'paper_overview' paper.pk %}">Open Workspace</a>
                         <a class="btn btn-outline-danger btn-sm" href="{% url 'delete_paper' paper.pk %}">Delete</a>
                     </div>
                 </div>

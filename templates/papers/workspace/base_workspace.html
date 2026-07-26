@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Workspace</h2>
+                <div class="list-group">
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'overview' %}active{% endif %}" href="{% url 'paper_overview' paper.id %}">Overview</a>
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'beginner' %}active{% endif %}" href="{% url 'paper_beginner' paper.id %}">Beginner Explanation</a>
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'technical' %}active{% endif %}" href="{% url 'paper_technical' paper.id %}">Technical Explanation</a>
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'sections' %}active{% endif %}" href="{% url 'paper_sections' paper.id %}">Section Learning</a>
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'glossary' %}active{% endif %}" href="{% url 'paper_glossary' paper.id %}">Glossary</a>
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'flashcards' %}active{% endif %}" href="{% url 'paper_flashcards' paper.id %}">Flashcards</a>
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'quiz' %}active{% endif %}" href="{% url 'paper_quiz' paper.id %}">Quiz</a>
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'notes' %}active{% endif %}" href="{% url 'paper_notes' paper.id %}">Notes</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-9">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+                    <div>
+                        <h3 class="h4 mb-1">{{ paper.title }}</h3>
+                        <p class="text-muted mb-0">Uploaded {{ paper.uploaded_at|date:"M d, Y" }} · Status: {{ paper.processing_status }}</p>
+                    </div>
+                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'my_papers' %}">Back to My Papers</a>
+                </div>
+            </div>
+        </div>
+        {% block workspace_content %}{% endblock %}
+    </div>
+</div>
+{% endblock %}

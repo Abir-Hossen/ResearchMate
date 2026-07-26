@@ -4,6 +4,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import PaperUploadForm
 from .models import Paper
+from .services import build_workspace_context, get_paper_metadata, get_user_paper
+from .utils import format_file_size
 
 
 @login_required(login_url='login')
@@ -45,3 +47,54 @@ def delete_paper_view(request, pk):
         return redirect('my_papers')
 
     return render(request, 'papers/delete_confirm.html', {'paper': paper})
+
+
+@login_required(login_url='login')
+def paper_overview(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+    metadata = get_paper_metadata(paper)
+    metadata.update(build_workspace_context(request.user, paper_id, 'overview'))
+    metadata['file_size_display'] = format_file_size(metadata['file_size'])
+    return render(request, 'papers/workspace/overview.html', metadata)
+
+
+@login_required(login_url='login')
+def paper_beginner(request, paper_id):
+    context = build_workspace_context(request.user, paper_id, 'beginner')
+    return render(request, 'papers/workspace/beginner.html', context)
+
+
+@login_required(login_url='login')
+def paper_technical(request, paper_id):
+    context = build_workspace_context(request.user, paper_id, 'technical')
+    return render(request, 'papers/workspace/technical.html', context)
+
+
+@login_required(login_url='login')
+def paper_sections(request, paper_id):
+    context = build_workspace_context(request.user, paper_id, 'sections')
+    return render(request, 'papers/workspace/sections.html', context)
+
+
+@login_required(login_url='login')
+def paper_glossary(request, paper_id):
+    context = build_workspace_context(request.user, paper_id, 'glossary')
+    return render(request, 'papers/workspace/glossary.html', context)
+
+
+@login_required(login_url='login')
+def paper_flashcards(request, paper_id):
+    context = build_workspace_context(request.user, paper_id, 'flashcards')
+    return render(request, 'papers/workspace/flashcards.html', context)
+
+
+@login_required(login_url='login')
+def paper_quiz(request, paper_id):
+    context = build_workspace_context(request.user, paper_id, 'quiz')
+    return render(request, 'papers/workspace/quiz.html', context)
+
+
+@login_required(login_url='login')
+def paper_notes(request, paper_id):
+    context = build_workspace_context(request.user, paper_id, 'notes')
+    return render(request, 'papers/workspace/notes.html', context)

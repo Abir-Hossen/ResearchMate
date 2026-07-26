@@ -1,0 +1,25 @@
+{% extends 'papers/workspace/base_workspace.html' %}
+
+{% block workspace_content %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <h4 class="h5 mb-3">Overview</h4>
+        <dl class="row mb-0">
+            <dt class="col-sm-4">Title</dt>
+            <dd class="col-sm-8">{{ title }}</dd>
+            <dt class="col-sm-4">Upload Date</dt>
+            <dd class="col-sm-8">{{ uploaded_at|date:"M d, Y" }}</dd>
+            <dt class="col-sm-4">File Name</dt>
+            <dd class="col-sm-8">{{ file_name }}</dd>
+            <dt class="col-sm-4">File Size</dt>
+            <dd class="col-sm-8">{{ file_size_display }}</dd>
+            <dt class="col-sm-4">Status</dt>
+            <dd class="col-sm-8">{{ status }}</dd>
+        </dl>
+        <div class="mt-4 d-flex gap-2 flex-wrap">
+            <a class="btn btn-primary" href="{{ paper.pdf_file.url }}" target="_blank">View PDF</a>
+            <a class="btn btn-outline-secondary" href="{{ paper.pdf_file.url }}" download>Download PDF</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
