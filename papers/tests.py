@@ -40,3 +40,29 @@ class PaperUploadTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Only PDF files are allowed.')
+
+    def test_my_papers_page_only_shows_current_user_papers(self):
+        owner = User.objects.create_user(username='owner', password='Secret123')
+        other = User.objects.create_user(username='other', password='Secret123')
+        Paper.objects.create(owner=owner, title='Owner Paper', pdf_file=SimpleUploadedFile('owner.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        Paper.objects.create(owner=other, title='Other Paper', pdf_file=SimpleUploadedFile('other.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+
+        self.client.force_login(owner)
+        response = self.client.get(reverse('my_papers'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Owner Paper')
+        self.assertNotContains(response, 'Other Paper')
+
+    def test_delete_paper_removes_file_and_database_record(self):
+        user = User.objects.create_user(username='deleteuser', password='Secret123')
+        self.client.force_login(user)
+        pdf = SimpleUploadedFile('delete.pdf', b'%PDF-1.4\n', content_type='application/pdf')
+        paper = Paper.objects.create(owner=user, title='Delete Me', pdf_file=pdf)
+
+        response = self.client.post(reverse('delete_paper', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Paper.objects.filter(pk=paper.pk).exists())
+        self.assertFalse(paper.pdf_file.storage.exists(paper.pdf_file.name))
+        self.assertContains(response, 'Paper deleted successfully')

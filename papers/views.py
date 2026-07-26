@@ -1,8 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import PaperUploadForm
+from .models import Paper
 
 
 @login_required(login_url='login')
@@ -19,3 +20,28 @@ def upload_paper_view(request):
         form = PaperUploadForm()
 
     return render(request, 'papers/upload.html', {'form': form})
+
+
+@login_required(login_url='login')
+def my_papers_view(request):
+    query = request.GET.get('q', '').strip()
+    papers = Paper.objects.filter(owner=request.user).order_by('-uploaded_at')
+
+    if query:
+        papers = papers.filter(title__icontains=query)
+
+    return render(request, 'papers/library.html', {'papers': papers, 'query': query})
+
+
+@login_required(login_url='login')
+def delete_paper_view(request, pk):
+    paper = get_object_or_404(Paper, pk=pk, owner=request.user)
+
+    if request.method == 'POST':
+        if paper.pdf_file:
+            paper.pdf_file.delete(save=False)
+        paper.delete()
+        messages.success(request, 'Paper deleted successfully.')
+        return redirect('my_papers')
+
+    return render(request, 'papers/delete_confirm.html', {'paper': paper})
