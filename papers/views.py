@@ -108,6 +108,12 @@ def paper_quiz(request, paper_id):
 
 
 @login_required(login_url='login')
+def paper_viva(request, paper_id):
+    context = build_workspace_context(request.user, paper_id, 'viva')
+    return render(request, 'papers/workspace/viva.html', context)
+
+
+@login_required(login_url='login')
 def paper_notes(request, paper_id):
     context = build_workspace_context(request.user, paper_id, 'notes')
     return render(request, 'papers/workspace/notes.html', context)

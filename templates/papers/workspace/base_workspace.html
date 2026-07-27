@@ -5,7 +5,7 @@
     <div class="col-lg-3">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <h2 class="h5 mb-3">Workspace</h2>
+                <h2 class="h5 mb-3">Learning Hub</h2>
                 <div class="list-group">
                     <a class="list-group-item list-group-item-action {% if active_tab == 'overview' %}active{% endif %}" href="{% url 'paper_overview' paper.id %}">Overview</a>
                     <a class="list-group-item list-group-item-action {% if active_tab == 'beginner' %}active{% endif %}" href="{% url 'paper_beginner' paper.id %}">Beginner Explanation</a>
@@ -14,6 +14,7 @@
                     <a class="list-group-item list-group-item-action {% if active_tab == 'glossary' %}active{% endif %}" href="{% url 'paper_glossary' paper.id %}">Glossary</a>
                     <a class="list-group-item list-group-item-action {% if active_tab == 'flashcards' %}active{% endif %}" href="{% url 'paper_flashcards' paper.id %}">Flashcards</a>
                     <a class="list-group-item list-group-item-action {% if active_tab == 'quiz' %}active{% endif %}" href="{% url 'paper_quiz' paper.id %}">Quiz</a>
+                    <a class="list-group-item list-group-item-action {% if active_tab == 'viva' %}active{% endif %}" href="{% url 'paper_viva' paper.id %}">Viva Preparation</a>
                     <a class="list-group-item list-group-item-action {% if active_tab == 'notes' %}active{% endif %}" href="{% url 'paper_notes' paper.id %}">Notes</a>
                 </div>
             </div>
