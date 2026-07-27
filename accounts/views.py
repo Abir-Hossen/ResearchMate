@@ -1,12 +1,12 @@
 import datetime
 
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.shortcuts import redirect, render
 
-from .forms import LoginForm, RegistrationForm
+from .forms import LoginForm, PasswordChangeForm, RegistrationForm
 
 
 def home_view(request):
@@ -68,3 +68,18 @@ def dashboard_view(request):
         'today': datetime.date.today(),
     }
     return render(request, 'accounts/dashboard.html', context)
+
+
+@login_required(login_url='login')
+def change_password_view(request):
+    if request.method == 'POST':
+        form = PasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, 'Password changed successfully.')
+            return redirect('dashboard')
+    else:
+        form = PasswordChangeForm(request.user)
+
+    return render(request, 'accounts/change_password.html', {'form': form})

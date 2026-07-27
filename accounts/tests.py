@@ -106,3 +106,29 @@ class AuthenticationFlowTests(TestCase):
         self.client.force_login(user)
         response = self.client.get(reverse('home'))
         self.assertRedirects(response, reverse('dashboard'))
+
+    def test_change_password_requires_login(self):
+        response = self.client.get(reverse('change_password'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/login/', response.url)
+
+    def test_authenticated_user_can_change_password_and_stay_logged_in(self):
+        user = User.objects.create_user(username='passuser', email='passuser@example.com', password='OldSecret123')
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse('change_password'),
+            {
+                'old_password': 'OldSecret123',
+                'new_password1': 'NewStrong123',
+                'new_password2': 'NewStrong123',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('NewStrong123'))
+        self.assertContains(response, 'Password changed successfully')
