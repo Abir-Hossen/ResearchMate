@@ -4,7 +4,14 @@
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <h4 class="h5">Technical Explanation</h4>
-        <p class="text-muted mb-0">Coming Soon.</p>
+        {% if analysis and analysis.technical_explanation %}
+            <p class="text-muted mb-3">A more technical explanation generated for this paper.</p>
+            <div class="border rounded p-3 bg-light">
+                {{ analysis.technical_explanation|linebreaksbr }}
+            </div>
+        {% else %}
+            <p class="text-muted mb-0">Run Start Learning to generate a technical explanation.</p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

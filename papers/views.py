@@ -9,6 +9,7 @@ from .services import (
     extract_pdf_content,
     get_paper_metadata,
     get_user_paper,
+    process_mock_ai,
 )
 from .utils import format_file_size
 
@@ -67,6 +68,7 @@ def paper_overview(request, paper_id):
 def start_learning_view(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
     extract_pdf_content(paper)
+    process_mock_ai(paper)
     messages.success(request, 'Paper is prepared for AI learning.')
     return redirect('paper_overview', paper_id=paper.id)
 

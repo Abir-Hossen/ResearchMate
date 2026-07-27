@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from reportlab.pdfgen import canvas
 
-from .models import Paper, PaperContent
+from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, QuizQuestion, VivaQuestion
 
 
 class PaperUploadTests(TestCase):
@@ -113,3 +113,44 @@ class PaperUploadTests(TestCase):
         self.assertIn('ResearchMate', content.extracted_text)
         self.assertEqual(content.page_count, 1)
         self.assertContains(response, 'Paper is prepared for AI learning')
+
+    def test_start_learning_generates_mock_learning_materials(self):
+        user = User.objects.create_user(username='mocklearner', password='Secret123')
+        buffer = BytesIO()
+        pdf_canvas = canvas.Canvas(buffer)
+        pdf_canvas.drawString(72, 720, 'Mock learning pipeline content')
+        pdf_canvas.save()
+        pdf_bytes = buffer.getvalue()
+
+        paper = Paper.objects.create(
+            owner=user,
+            title='Mock Learning Paper',
+            pdf_file=SimpleUploadedFile('mock.pdf', pdf_bytes, content_type='application/pdf'),
+        )
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('start_learning', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(AIAnalysis.objects.filter(paper=paper).exists())
+        self.assertTrue(Glossary.objects.filter(paper=paper).exists())
+        self.assertTrue(Flashcard.objects.filter(paper=paper).exists())
+        self.assertTrue(QuizQuestion.objects.filter(paper=paper).exists())
+        self.assertTrue(VivaQuestion.objects.filter(paper=paper).exists())
+        self.assertTrue(LearningProgress.objects.filter(paper=paper).exists())
+
+    def test_ai_foundation_relationships_are_available(self):
+        user = User.objects.create_user(username='foundationuser', password='Secret123')
+        paper = Paper.objects.create(
+            owner=user,
+            title='Foundation Paper',
+            pdf_file=SimpleUploadedFile('foundation.pdf', b'%PDF-1.4\n', content_type='application/pdf'),
+        )
+
+        analysis = AIAnalysis.objects.create(paper=paper, overview='A placeholder overview')
+        progress = LearningProgress.objects.create(paper=paper)
+
+        self.assertEqual(analysis.paper, paper)
+        self.assertEqual(progress.paper, paper)
+        self.assertEqual(paper.ai_analysis, analysis)
+        self.assertEqual(paper.learning_progress, progress)

@@ -4,7 +4,23 @@
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <h4 class="h5">Quiz</h4>
-        <p class="text-muted mb-0">Coming Soon.</p>
+        {% if quiz_questions %}
+            {% for question in quiz_questions %}
+            <div class="border rounded p-3 mb-3">
+                <p class="fw-semibold mb-3">{{ question.question }}</p>
+                <ul class="mb-2">
+                    <li>{{ question.option_a }}</li>
+                    <li>{{ question.option_b }}</li>
+                    <li>{{ question.option_c }}</li>
+                    <li>{{ question.option_d }}</li>
+                </ul>
+                <p class="mb-1"><strong>Correct Answer:</strong> {{ question.correct_answer }}</p>
+                <p class="text-muted mb-0">{{ question.explanation }}</p>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-muted mb-0">Run Start Learning to generate quiz questions.</p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

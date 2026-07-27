@@ -10,9 +10,21 @@
         <p class="text-muted mb-3">
             Prepare for presentations, thesis defenses, and academic discussions using AI-generated viva questions.
         </p>
-        <div class="alert alert-light border" role="status">
-            Your viva preparation materials will appear here after AI analysis is completed.
-        </div>
+        {% if viva_questions %}
+            {% for item in viva_questions %}
+            <div class="border rounded p-3 mb-3">
+                <p class="fw-semibold mb-2">{{ item.question }}</p>
+                <p class="mb-1"><strong>Suggested answer:</strong> {{ item.suggested_answer }}</p>
+                {% if item.follow_up_question %}
+                    <p class="text-muted mb-0"><strong>Follow-up:</strong> {{ item.follow_up_question }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-light border" role="status">
+                Run Start Learning to generate viva preparation materials.
+            </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

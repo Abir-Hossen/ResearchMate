@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 
 
@@ -22,7 +23,7 @@ class Paper(models.Model):
     def content_status(self):
         try:
             return self.content.extraction_status
-        except PaperContent.DoesNotExist:
+        except (PaperContent.DoesNotExist, ObjectDoesNotExist):
             return 'Pending'
 
 
@@ -53,7 +54,7 @@ class AIAnalysis(models.Model):
     key_concepts = models.JSONField(default=list, blank=True)
     reading_difficulty_level = models.CharField(max_length=50, blank=True)
     reading_difficulty_reason = models.TextField(blank=True)
-    analysis_status = models.CharField(max_length=30, default='Pending', blank=True)
+    analysis_status = models.CharField(max_length=30, default='Pending')
     ai_model = models.CharField(max_length=100, blank=True)
     generated_at = models.DateTimeField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
@@ -72,6 +73,10 @@ class Glossary(models.Model):
 
     class Meta:
         ordering = ['display_order', 'id']
+        indexes = [models.Index(fields=['paper', 'display_order'])]
+
+    class Meta:
+        ordering = ['display_order', 'id']
 
     def __str__(self):
         return self.term
@@ -85,6 +90,7 @@ class Flashcard(models.Model):
 
     class Meta:
         ordering = ['display_order', 'id']
+        indexes = [models.Index(fields=['paper', 'display_order'])]
 
     def __str__(self):
         return self.question[:80]
@@ -103,6 +109,7 @@ class QuizQuestion(models.Model):
 
     class Meta:
         ordering = ['display_order', 'id']
+        indexes = [models.Index(fields=['paper', 'display_order'])]
 
     def __str__(self):
         return self.question[:80]
@@ -117,6 +124,7 @@ class VivaQuestion(models.Model):
 
     class Meta:
         ordering = ['display_order', 'id']
+        indexes = [models.Index(fields=['paper', 'display_order'])]
 
     def __str__(self):
         return self.question[:80]
@@ -134,6 +142,9 @@ class LearningProgress(models.Model):
     notes_completed = models.BooleanField(default=False)
     overall_progress = models.PositiveIntegerField(default=0)
     last_accessed = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['paper'])]
 
     def __str__(self):
         return f'Progress for {self.paper.title}'

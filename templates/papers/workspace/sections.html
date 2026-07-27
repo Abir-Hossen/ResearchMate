@@ -4,7 +4,15 @@
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <h4 class="h5">Section Learning</h4>
-        <p class="text-muted mb-0">Coming Soon.</p>
+        {% if analysis_contributions %}
+            <ul class="mb-0">
+                {% for contribution in analysis_contributions %}
+                    <li>{{ contribution }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted mb-0">Run Start Learning to generate section-based insights.</p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
