@@ -1,105 +1,75 @@
-"""Mock AI orchestration service for the Learning Hub.
+"""Simple mock AI service used for local development and tests.
 
-This module is intentionally self-contained and does not call any external API.
-It returns structured mock learning data that mirrors the shape expected for
-future Gemini integration.
+Provides `MockLearningService.build_payload()` which returns a minimal
+payload shape compatible with `MockPayloadParser`.
 """
 
-import hashlib
-import re
-from datetime import datetime
+from __future__ import annotations
 
-from django.utils import timezone
+from typing import Dict, Any
 
 
 class MockLearningService:
-    """Create realistic mock learning content from extracted paper text."""
+    """Generate a deterministic mock payload from extracted text.
 
-    def __init__(self, extracted_text):
-        self.extracted_text = extracted_text or ''
+    This avoids external network calls when running the dev server or tests
+    that don't require an external AI provider.
+    """
 
-    def build_payload(self):
+    def __init__(self, extracted_text: str):
+        self.extracted_text = (extracted_text or '').strip()
+
+    def build_payload(self) -> Dict[str, Any]:
         if not self.extracted_text:
-            raise ValueError('Extracted text is required for mock learning generation.')
+            raise ValueError('Extracted text is required for mock analysis.')
 
-        text = re.sub(r'\s+', ' ', self.extracted_text).strip()
-        words = text.split()
-        preview = ' '.join(words[:60])
-        title_words = [word for word in words if word.isalpha()][:8]
-        base_topic = ' '.join(title_words) or 'research topic'
-        topic_name = base_topic.title()
-        digest = hashlib.sha256(text.encode('utf-8')).hexdigest()[:10]
+        # Keep the mock content small but valid for the parser.
+        overview = self.extracted_text[:400] + ("..." if len(self.extracted_text) > 400 else "")
+        beginner = f"Beginner summary: {overview[:200]}"
+        technical = f"Technical summary: {overview[:200]}"
 
-        return {
-            'overview': f'{topic_name} is introduced as a practical research topic with strong educational relevance. The mock analysis highlights the core ideas, the main contribution, and the most useful study angles for learners.',
-            'beginner_explanation': f'In simple terms, {topic_name} is presented as a structured concept that can be understood by first-time readers through clear examples and careful explanations.',
-            'technical_explanation': f'Technically, {topic_name} involves layered reasoning, methodical decomposition, and evidence-based interpretation that connects the main ideas to the broader research context.',
-            'key_contributions': [
-                'Clarifies the central problem being addressed.',
-                'Connects core concepts to practical application.',
-                'Provides a study-friendly structure for future review.',
-            ],
+        payload = {
+            'overview': overview,
+            'beginner_explanation': beginner,
+            'technical_explanation': technical,
+            'key_contributions': ['Auto-generated highlight 1'],
             'key_concepts': [
-                {'term': 'Research framing', 'explanation': 'Defining the problem clearly before analysis.'},
-                {'term': 'Methodological reasoning', 'explanation': 'Explaining how the study approaches the topic.'},
-                {'term': 'Evidence synthesis', 'explanation': 'Connecting claims to supporting ideas.'},
+                {'term': 'AutoConcept', 'explanation': 'An auto-generated concept explanation.'}
             ],
-            'reading_difficulty': {
-                'level': 'Intermediate',
-                'reason': 'The material combines conceptual explanations with technical details that require careful review.',
-            },
+            'reading_difficulty': {'level': 'Intermediate', 'reason': 'Mocked difficulty.'},
             'glossary_terms': [
                 {
-                    'term': 'Framework',
-                    'simple_explanation': 'A structured way of organizing ideas.',
-                    'technical_explanation': 'A conceptual model used to interpret a problem or system.',
-                    'example': 'A framework for comparing two research methods.',
-                    'display_order': 1,
-                },
-                {
-                    'term': 'Evidence',
-                    'simple_explanation': 'The information that supports a claim.',
-                    'technical_explanation': 'Observations, data, or references used to justify an argument.',
-                    'example': 'Evidence from prior studies strengthens the conclusion.',
-                    'display_order': 2,
-                },
+                    'term': 'ResearchMate',
+                    'simple_explanation': 'A study platform for research papers.',
+                    'technical_explanation': 'A mock glossary entry used for local testing.',
+                    'example': 'ResearchMate helps structure learning materials.',
+                }
             ],
             'flashcards': [
                 {
-                    'question': f'What is the main purpose of {topic_name}?',
-                    'answer': 'To explain the topic clearly and support structured learning.',
-                    'display_order': 1,
-                },
-                {
-                    'question': f'How does {topic_name} support academic understanding?',
-                    'answer': 'It helps learners connect evidence, structure, and interpretation.',
-                    'display_order': 2,
-                },
+                    'question': 'What does ResearchMate help with?',
+                    'answer': 'It helps structure learning material from research papers.',
+                }
             ],
             'quiz_questions': [
                 {
-                    'question': f'Which statement best describes {topic_name}?',
-                    'option_a': 'A purely decorative concept',
-                    'option_b': 'A structured research idea with educational value',
-                    'option_c': 'A mathematical formula only',
-                    'option_d': 'A software installation step',
-                    'correct_answer': 'option_b',
-                    'explanation': 'The topic is presented as a meaningful academic concept.',
-                    'display_order': 1,
+                    'question': 'What is the purpose of ResearchMate?',
+                    'option_a': 'To edit PDFs',
+                    'option_b': 'To help study research papers',
+                    'option_c': 'To manage email',
+                    'option_d': 'To create databases',
+                    'correct_answer': 'B',
+                    'explanation': 'ResearchMate structures learning materials from papers.',
                 }
             ],
             'viva_questions': [
                 {
-                    'question': f'How would you explain {topic_name} in a short presentation?',
-                    'suggested_answer': 'I would summarize the main idea, its relevance, and its practical significance.',
-                    'follow_up_question': 'How would you connect this topic to your broader research interests?',
-                    'display_order': 1,
+                    'question': 'How does ResearchMate support learning?',
+                    'suggested_answer': 'It converts uploaded papers into structured study content.',
+                    'follow_up_question': 'What kind of content does it create?',
                 }
             ],
-            'metadata': {
-                'preview': preview,
-                'topic_name': topic_name,
-                'digest': digest,
-                'generated_at': timezone.now().isoformat(),
-            },
+            'metadata': {'source': 'mock'},
         }
+
+        return payload

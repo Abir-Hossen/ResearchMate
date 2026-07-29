@@ -12,6 +12,9 @@ from .services import (
     process_mock_ai,
 )
 from .utils import format_file_size
+from django.http import HttpResponse
+from django.conf import settings
+from .groq_connectivity import GroqLearningService
 
 
 @login_required(login_url='login')
@@ -119,3 +122,34 @@ def paper_viva(request, paper_id):
 def paper_notes(request, paper_id):
     context = build_workspace_context(request.user, paper_id, 'notes')
     return render(request, 'papers/workspace/notes.html', context)
+
+
+def groq_test_view(request):
+    """Development-only view that exercises the GroqLearningService.
+
+    URL: /debug/groq-test/
+    """
+    if not settings.DEBUG:
+        return HttpResponse('Not available', status=404)
+
+    try:
+        service = GroqLearningService()
+    except Exception as exc:
+        content = f"Error initializing GroqLearningService:\n{type(exc).__name__}: {exc}"
+        return HttpResponse(content, content_type='text/plain', status=500)
+
+    try:
+        result = service.test_connection()
+    except Exception as exc:
+        content = f"Groq request failed:\n{type(exc).__name__}: {exc}"
+        return HttpResponse(content, content_type='text/plain', status=500)
+
+    body = [
+        f"API key loaded: {bool(settings.GROQ_API_KEY or None)}",
+        f"Model name: {result.get('model')}",
+        f"Connection successful: Yes",
+        f"AI response: {result.get('response')}",
+        f"Response time: {result.get('elapsed'):.3f} s",
+    ]
+
+    return HttpResponse('\n'.join(body), content_type='text/plain')

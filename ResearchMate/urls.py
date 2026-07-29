@@ -20,12 +20,14 @@ from django.contrib import admin
 from django.urls import include, path
 
 from accounts.views import home_view
+from papers.views import groq_test_view
 
 urlpatterns = [
     path('', home_view, name='home'),
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('papers/', include('papers.urls')),
+    path('debug/groq-test/', groq_test_view, name='groq_test'),
 ]
 
 if settings.DEBUG:

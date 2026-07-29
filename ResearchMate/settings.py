@@ -15,6 +15,32 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+import os
+
+# Load simple .env file if present (KEY=VALUE lines). This avoids adding new
+# dependencies while allowing local API keys to be set for development.
+env_file = BASE_DIR / '.env'
+if env_file.exists():
+    try:
+        for raw in env_file.read_text(encoding='utf8').splitlines():
+            line = raw.strip()
+            if not line or line.startswith('#'):
+                continue
+            if '=' not in line:
+                continue
+            key, val = line.split('=', 1)
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+    except Exception:
+        # If anything goes wrong reading .env, continue without failing startup.
+        pass
+
+# Expose Groq settings in settings for easy access by services.
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+GROQ_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
