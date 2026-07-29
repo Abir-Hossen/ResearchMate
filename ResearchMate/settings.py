@@ -40,6 +40,7 @@ if env_file.exists():
 # Expose Groq settings in settings for easy access by services.
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 GROQ_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+AI_PROVIDER = os.getenv('AI_PROVIDER', 'groq')
 
 
 # Quick-start development settings - unsuitable for production

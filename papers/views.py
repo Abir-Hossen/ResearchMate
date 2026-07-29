@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,6 +17,8 @@ from .utils import format_file_size
 from django.http import HttpResponse
 from django.conf import settings
 from .groq_connectivity import GroqLearningService
+
+logger = logging.getLogger(__name__)
 
 
 @login_required(login_url='login')
@@ -70,9 +74,21 @@ def paper_overview(request, paper_id):
 @login_required(login_url='login')
 def start_learning_view(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
-    extract_pdf_content(paper)
-    process_mock_ai(paper)
-    messages.success(request, 'Paper is prepared for AI learning.')
+    try:
+        logger.info('Paper ID %s: Extraction started.', paper.id)
+        extract_pdf_content(paper)
+        logger.info('Paper ID %s: Extraction completed.', paper.id)
+        result = process_mock_ai(paper)
+        if getattr(result, 'analysis_status', None) == 'Failed':
+            messages.error(request, 'AI analysis could not be completed.')
+        else:
+            logger.info('Paper ID %s: Database saved.', paper.id)
+            logger.info('Paper ID %s: Learning Hub updated.', paper.id)
+            messages.success(request, 'Paper is prepared for AI learning.')
+    except Exception as exc:
+        logger.exception('Paper ID %s: Learning workflow failed.', paper.id)
+        messages.error(request, 'AI analysis could not be completed.')
+
     return redirect('paper_overview', paper_id=paper.id)
 
 

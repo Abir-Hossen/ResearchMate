@@ -56,6 +56,8 @@ class AIAnalysis(models.Model):
     reading_difficulty_reason = models.TextField(blank=True)
     analysis_status = models.CharField(max_length=30, default='Pending')
     ai_model = models.CharField(max_length=100, blank=True)
+    raw_response = models.TextField(blank=True)
+    analysis_error = models.TextField(blank=True)
     generated_at = models.DateTimeField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
 

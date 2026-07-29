@@ -66,6 +66,10 @@ class GroqLearningService:
 
         return {'model': self.model_name, 'response': text, 'elapsed': elapsed}
 
+    def generate(self, prompt: str) -> str:
+        """Send a prompt to Groq and return the plain text response."""
+        return self.generate_analysis(prompt)
+
     def generate_analysis(self, prompt: str) -> str:
         """Send a prompt to Groq and return the plain text response."""
         logger.info('Request sent to Groq model %s: %s', self.model_name, prompt)

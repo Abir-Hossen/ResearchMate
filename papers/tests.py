@@ -30,6 +30,7 @@ class GroqConnectivityTests(TestCase):
 
 
 class PaperUploadTests(TestCase):
+    @override_settings(AI_PROVIDER='mock')
     def test_upload_page_requires_login(self):
         response = self.client.get(reverse('upload_paper'))
         self.assertEqual(response.status_code, 302)
@@ -110,6 +111,7 @@ class PaperUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Study Paper')
 
+    @override_settings(AI_PROVIDER='mock')
     def test_start_learning_extracts_text_and_marks_paper_ready(self):
         user = User.objects.create_user(username='learner', password='Secret123')
         buffer = BytesIO()
@@ -134,6 +136,7 @@ class PaperUploadTests(TestCase):
         self.assertEqual(content.page_count, 1)
         self.assertContains(response, 'Paper is prepared for AI learning')
 
+    @override_settings(AI_PROVIDER='mock')
     def test_start_learning_generates_mock_learning_materials(self):
         user = User.objects.create_user(username='mocklearner', password='Secret123')
         buffer = BytesIO()
@@ -155,9 +158,63 @@ class PaperUploadTests(TestCase):
         self.assertTrue(AIAnalysis.objects.filter(paper=paper).exists())
         self.assertTrue(Glossary.objects.filter(paper=paper).exists())
         self.assertTrue(Flashcard.objects.filter(paper=paper).exists())
-        self.assertTrue(QuizQuestion.objects.filter(paper=paper).exists())
+        self.assertFalse(QuizQuestion.objects.filter(paper=paper).exists())
         self.assertTrue(VivaQuestion.objects.filter(paper=paper).exists())
         self.assertTrue(LearningProgress.objects.filter(paper=paper).exists())
+
+    @override_settings(AI_PROVIDER='groq', GROQ_API_KEY='test-key', GROQ_MODEL='llama-3.3-70b-versatile')
+    @patch('papers.ai_providers.GroqProvider.generate', return_value='{"beginner_explanation":"A simple explanation","technical_explanation":"A technical explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"Needs background knowledge"},"section_learning":[{"section":"Introduction","summary":"Read the intro first"}],"glossary":[{"term":"Neuron","simple_explanation":"A nerve cell","technical_explanation":"Specialized cell transmitting signals","example":"Neurons communicate through synapses"}],"flashcards":[{"question":"What is a neuron?","answer":"A nerve cell"}],"viva_questions":[{"question":"What is the main contribution?","suggested_answer":"It advances the field","follow_up_question":"Why is it significant?"}]}')
+    def test_start_learning_uses_groq_payload_to_create_learning_materials(self, mock_generate):
+        user = User.objects.create_user(username='groqlearner', password='Secret123')
+        buffer = BytesIO()
+        pdf_canvas = canvas.Canvas(buffer)
+        pdf_canvas.drawString(72, 720, 'Groq learning pipeline content')
+        pdf_canvas.save()
+        pdf_bytes = buffer.getvalue()
+
+        paper = Paper.objects.create(
+            owner=user,
+            title='Groq Learning Paper',
+            pdf_file=SimpleUploadedFile('groq.pdf', pdf_bytes, content_type='application/pdf'),
+        )
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('start_learning', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(AIAnalysis.objects.filter(paper=paper).exists())
+        self.assertTrue(Glossary.objects.filter(paper=paper).exists())
+        self.assertTrue(Flashcard.objects.filter(paper=paper).exists())
+        self.assertTrue(VivaQuestion.objects.filter(paper=paper).exists())
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertEqual(analysis.analysis_status, 'Ready')
+        self.assertEqual(analysis.ai_model, 'groq')
+
+    @override_settings(AI_PROVIDER='groq', GROQ_API_KEY='test-key', GROQ_MODEL='llama-3.3-70b-versatile')
+    @patch('papers.ai_providers.GroqProvider.generate', side_effect=RuntimeError('Groq unavailable'))
+    def test_start_learning_keeps_existing_analysis_when_groq_fails(self, mock_generate):
+        user = User.objects.create_user(username='groqfailure', password='Secret123')
+        buffer = BytesIO()
+        pdf_canvas = canvas.Canvas(buffer)
+        pdf_canvas.drawString(72, 720, 'Groq failure handling content')
+        pdf_canvas.save()
+        pdf_bytes = buffer.getvalue()
+
+        paper = Paper.objects.create(
+            owner=user,
+            title='Groq Failure Paper',
+            pdf_file=SimpleUploadedFile('groq-failure.pdf', pdf_bytes, content_type='application/pdf'),
+        )
+        existing_analysis = AIAnalysis.objects.create(paper=paper, overview='Existing overview', analysis_status='Ready')
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('start_learning', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'AI analysis could not be completed.')
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertEqual(analysis.overview, existing_analysis.overview)
+        self.assertEqual(analysis.analysis_status, 'Failed')
 
     def test_ai_foundation_relationships_are_available(self):
         user = User.objects.create_user(username='foundationuser', password='Secret123')
