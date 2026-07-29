@@ -1,9 +1,5 @@
-from .base import build_feature_prompt
+from .beginner_prompt import build_beginner_prompt_text
 
 
 def build_beginner_prompt(extracted_text):
-    instruction = (
-        "Write a beginner-friendly explanation of the paper's main idea. "
-        "Keep it clear, simple, and easy to understand."
-    )
-    return build_feature_prompt(extracted_text, 'a beginner explanation', instruction)
+    return build_beginner_prompt_text(extracted_text)

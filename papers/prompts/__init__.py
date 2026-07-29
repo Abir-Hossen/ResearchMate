@@ -1,5 +1,6 @@
 from .base import build_feature_prompt
 from .beginner import build_beginner_prompt
+from .beginner_prompt import build_beginner_prompt_text
 from .difficulty import build_difficulty_prompt
 from .flashcards import build_flashcards_prompt
 from .glossary import build_glossary_prompt

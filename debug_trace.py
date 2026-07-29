@@ -1,15 +1,17 @@
 import os
 from io import BytesIO
+
+import django
 from reportlab.pdfgen import canvas
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import User
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ResearchMate.settings')
-import django
 django.setup()
+
 from django.conf import settings
 from papers.models import Paper
-from papers.services import get_or_extract_pdf_content, process_mock_ai
+from papers.services import extract_pdf_content, process_mock_ai
 
 print('DJANGO SETTINGS MODULE:', os.environ.get('DJANGO_SETTINGS_MODULE'))
 print('PYTHON EXECUTABLE:', os.path.abspath(__file__))
@@ -26,7 +28,7 @@ paper = Paper.objects.create(owner=user, title='Debug Paper', pdf_file=SimpleUpl
 print('paper created:', paper.pk)
 
 try:
-    content = get_or_extract_pdf_content(paper)
+    content = extract_pdf_content(paper)
     print('content status:', content.extraction_status)
     print('content len:', len(content.extracted_text))
 except Exception as e:

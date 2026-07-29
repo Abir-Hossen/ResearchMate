@@ -89,7 +89,7 @@ def start_learning_view(request, paper_id):
         logger.exception('Paper ID %s: Learning workflow failed.', paper.id)
         messages.error(request, 'AI analysis could not be completed.')
 
-    return redirect('paper_overview', paper_id=paper.id)
+    return redirect('paper_beginner', paper_id=paper.id)
 
 
 @login_required(login_url='login')

@@ -8,6 +8,7 @@ from django.urls import reverse
 from reportlab.pdfgen import canvas
 
 from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, QuizQuestion, VivaQuestion
+from .prompts.beginner import build_beginner_prompt
 
 
 class GroqConnectivityTests(TestCase):
@@ -110,6 +111,30 @@ class PaperUploadTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Study Paper')
+
+    def test_beginner_page_renders_markdown_sections_for_generated_content(self):
+        user = User.objects.create_user(username='beginnerlayout', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Beginner Layout Paper', pdf_file=SimpleUploadedFile('layout.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        AIAnalysis.objects.create(
+            paper=paper,
+            beginner_explanation='## Paper Overview\n\nThis paper studies a new method.\n\n- It is practical.\n- It is useful.',
+            analysis_status='Ready',
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<h2 class="section-title">Paper Overview</h2>')
+        self.assertContains(response, '<li>It is practical.</li>')
+
+    def test_beginner_prompt_requests_json_payload_for_pipeline(self):
+        prompt = build_beginner_prompt('A sample paper about neural networks.')
+
+        self.assertIn('Return ONLY valid JSON', prompt)
+        self.assertIn('"beginner_explanation"', prompt)
+        self.assertIn('"technical_explanation"', prompt)
+        self.assertIn('"glossary"', prompt)
 
     @override_settings(AI_PROVIDER='mock')
     def test_start_learning_extracts_text_and_marks_paper_ready(self):
