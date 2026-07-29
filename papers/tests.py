@@ -1,12 +1,32 @@
 from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from reportlab.pdfgen import canvas
 
 from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, QuizQuestion, VivaQuestion
+
+
+class GroqConnectivityTests(TestCase):
+    @override_settings(DEBUG=True, GROQ_API_KEY='test-key', GROQ_MODEL='llama-3.3-70b-versatile')
+    @patch('papers.groq_connectivity.GroqLearningService.test_connection', return_value={
+        'model': 'llama-3.3-70b-versatile',
+        'response': 'Groq connected',
+        'elapsed': 0.123,
+    })
+    def test_groq_debug_view_shows_status_and_response(self, mock_test_connection):
+        response = self.client.get(reverse('groq_test'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'API key loaded')
+        self.assertContains(response, 'Model name')
+        self.assertContains(response, 'Connection successful')
+        self.assertContains(response, 'AI response')
+        self.assertContains(response, 'Response time')
+        self.assertContains(response, 'Groq connected')
 
 
 class PaperUploadTests(TestCase):
