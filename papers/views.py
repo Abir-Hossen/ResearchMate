@@ -2,17 +2,20 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import PaperUploadForm
 from .models import Paper
 from .services import (
+    _get_user_facing_error_message,
     build_workspace_context,
     extract_pdf_content,
     get_paper_metadata,
     get_user_paper,
     process_mock_ai,
 )
+from .technical_service import TechnicalExplanationError, generate_technical_explanation
 from .utils import format_file_size
 from django.http import HttpResponse
 from django.conf import settings
@@ -75,19 +78,27 @@ def paper_overview(request, paper_id):
 def start_learning_view(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
     try:
-        logger.info('Paper ID %s: Extraction started.', paper.id)
-        extract_pdf_content(paper)
-        logger.info('Paper ID %s: Extraction completed.', paper.id)
+        try:
+            content = paper.content
+        except ObjectDoesNotExist:
+            content = None
+
+        if content is None or not content.extracted_text or content.extraction_status != 'Ready':
+            logger.info('Paper ID %s: Extraction started.', paper.id)
+            extract_pdf_content(paper)
+            logger.info('Paper ID %s: Extraction completed.', paper.id)
+        else:
+            logger.info('Paper ID %s: Reusing existing extracted text.', paper.id)
+
         result = process_mock_ai(paper)
         if getattr(result, 'analysis_status', None) == 'Failed':
-            messages.error(request, 'AI analysis could not be completed.')
+            logger.warning('Paper ID %s: AI analysis failed and the workspace will show a retry banner.', paper.id)
         else:
             logger.info('Paper ID %s: Database saved.', paper.id)
             logger.info('Paper ID %s: Learning Hub updated.', paper.id)
             messages.success(request, 'Paper is prepared for AI learning.')
     except Exception as exc:
         logger.exception('Paper ID %s: Learning workflow failed.', paper.id)
-        messages.error(request, 'AI analysis could not be completed.')
 
     return redirect('paper_beginner', paper_id=paper.id)
 
@@ -100,6 +111,17 @@ def paper_beginner(request, paper_id):
 
 @login_required(login_url='login')
 def paper_technical(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+
+    if request.method == 'POST':
+        try:
+            generate_technical_explanation(paper, force_refresh=True)
+            messages.success(request, 'Technical explanation generated successfully.')
+        except TechnicalExplanationError as exc:
+            logger.warning('Paper ID %s: technical explanation generation failed: %s', paper.id, exc)
+            messages.error(request, str(exc))
+        return redirect('paper_technical', paper_id=paper.id)
+
     context = build_workspace_context(request.user, paper_id, 'technical')
     return render(request, 'papers/workspace/technical.html', context)
 

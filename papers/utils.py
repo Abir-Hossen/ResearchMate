@@ -18,43 +18,55 @@ def render_beginner_markdown(content):
     if not content:
         return ''
 
-    parts = []
-    lines = content.splitlines()
+    lines = [line.rstrip() for line in content.splitlines()]
+    html = []
+    paragraph_buffer = []
+    list_buffer = []
+
+    def flush_paragraph():
+        if paragraph_buffer:
+            paragraph_text = ' '.join(part.strip() for part in paragraph_buffer if part.strip())
+            if paragraph_text:
+                html.append(f'<p>{paragraph_text}</p>')
+            paragraph_buffer.clear()
+
+    def flush_list():
+        if list_buffer:
+            html.append('<ul class="section-list">')
+            for item in list_buffer:
+                html.append(f'<li>{item}</li>')
+            html.append('</ul>')
+            list_buffer.clear()
 
     for line in lines:
         stripped = line.strip()
         if not stripped:
+            flush_paragraph()
             continue
+
         if stripped.startswith('## '):
-            heading = stripped[3:].strip()
-            parts.append(f'<h2 class="section-title">{heading}</h2>')
-        elif stripped.startswith('- '):
-            parts.append(f'<li>{stripped[2:].strip()}</li>')
-        elif stripped.startswith('* '):
-            parts.append(f'<li>{stripped[2:].strip()}</li>')
-        elif stripped.startswith('1. '):
-            parts.append(f'<li>{stripped[3:].strip()}</li>')
-        else:
-            parts.append(f'<p>{stripped}</p>')
+            flush_paragraph()
+            flush_list()
+            html.append(f'<h2 class="section-title">{stripped[3:].strip()}</h2>')
+            continue
 
-    if not parts:
-        return ''
+        if stripped.startswith('### '):
+            flush_paragraph()
+            flush_list()
+            html.append(f'<h3 class="subsection-title">{stripped[4:].strip()}</h3>')
+            continue
 
-    html = []
-    in_list = False
-    for chunk in parts:
-        if chunk.startswith('<li>'):
-            if not in_list:
-                html.append('<ul class="section-list">')
-                in_list = True
-            html.append(chunk)
-        else:
-            if in_list:
-                html.append('</ul>')
-                in_list = False
-            html.append(chunk)
+        if stripped.startswith('- ') or stripped.startswith('* ') or stripped.startswith('1. '):
+            flush_paragraph()
+            if stripped.startswith('1. '):
+                list_buffer.append(stripped[3:].strip())
+            else:
+                list_buffer.append(stripped[2:].strip())
+            continue
 
-    if in_list:
-        html.append('</ul>')
+        paragraph_buffer.append(stripped)
+
+    flush_paragraph()
+    flush_list()
 
     return '\n'.join(html)

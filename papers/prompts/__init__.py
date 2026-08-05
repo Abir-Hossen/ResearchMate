@@ -7,6 +7,7 @@ from .glossary import build_glossary_prompt
 from .quiz import build_quiz_prompt
 from .section_learning import build_section_learning_prompt
 from .technical import build_technical_prompt
+from .technical_prompt import build_technical_prompt as build_technical_prompt_text
 from .viva import build_viva_prompt
 
 __all__ = [

@@ -1,4 +1,5 @@
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -9,6 +10,9 @@ from reportlab.pdfgen import canvas
 
 from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, QuizQuestion, VivaQuestion
 from .prompts.beginner import build_beginner_prompt
+from .prompts.technical import build_technical_prompt
+from .response_validator import validate_json_response
+from .services import _get_user_facing_error_message
 
 
 class GroqConnectivityTests(TestCase):
@@ -136,6 +140,97 @@ class PaperUploadTests(TestCase):
         self.assertIn('"technical_explanation"', prompt)
         self.assertIn('"glossary"', prompt)
 
+    def test_technical_prompt_requests_structured_markdown_sections(self):
+        prompt = build_technical_prompt('A sample paper about neural networks.')
+
+        self.assertIn('Overall Technical Architecture', prompt)
+        self.assertIn('Model Architecture', prompt)
+        self.assertIn('Data Processing Pipeline', prompt)
+        self.assertIn('Technical Design Decisions', prompt)
+        self.assertIn('Experimental Design', prompt)
+        self.assertIn('Technical Strengths', prompt)
+        self.assertIn('Technical Limitations', prompt)
+        self.assertIn('Engineering Takeaways', prompt)
+        self.assertIn('500-700 words', prompt)
+        self.assertIn('Treat the paper as reference material only', prompt)
+        self.assertIn('Never copy text', prompt)
+        self.assertIn('Never repeat the title', prompt)
+        self.assertIn('senior AI researcher and university professor', prompt)
+
+    def test_technical_page_renders_markdown_sections_for_generated_content(self):
+        user = User.objects.create_user(username='technicallayout', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Technical Layout Paper', pdf_file=SimpleUploadedFile('technical.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        AIAnalysis.objects.create(
+            paper=paper,
+            technical_explanation='## Research Objective\n\nThis paper studies a new method.\n\n- It is practical.\n- It is useful.',
+            analysis_status='Ready',
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<h2 class="section-title">Research Objective</h2>')
+        self.assertContains(response, '<li>It is practical.</li>')
+
+    @override_settings(AI_PROVIDER='mock')
+    def test_technical_page_shows_generate_button_when_content_is_missing(self):
+        user = User.objects.create_user(username='technicalbutton', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Technical Button Paper', pdf_file=SimpleUploadedFile('technical-button.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='Technical button extraction content', extraction_status='Ready')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Generate Technical Explanation')
+        self.assertNotContains(response, 'Run Start Learning to generate a technical explanation.')
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate', return_value='{"technical_explanation":"# Technical Explanation\\n\\n## Overall Technical Architecture\\n\\n' + ('This is a complete technical lecture note. ' * 80) + '\\n\\n## Model Architecture\\n\\nThis section teaches the background concepts needed to understand the paper. ","beginner_explanation":"A simple explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"A bit technical"},"glossary":[],"flashcards":[],"viva_questions":[]}')
+    def test_generate_technical_explanation_persists_once_and_reuses_database_value(self, mock_generate):
+        user = User.objects.create_user(username='technicalgen', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Technical Generate Paper', pdf_file=SimpleUploadedFile('technical-generate.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for generation.', extraction_status='Ready')
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('paper_technical', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Technical Explanation')
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertIn('Overall Technical Architecture', analysis.technical_explanation)
+        self.assertEqual(mock_generate.call_count, 1)
+
+        response_refresh = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertEqual(response_refresh.status_code, 200)
+        self.assertContains(response_refresh, 'Overall Technical Architecture')
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate')
+    def test_generate_technical_explanation_requests_fresh_api_output_every_time(self, mock_generate):
+        user = User.objects.create_user(username='technicalrefresh', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Technical Refresh Paper', pdf_file=SimpleUploadedFile('technical-refresh.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for generation.', extraction_status='Ready')
+        AIAnalysis.objects.create(
+            paper=paper,
+            technical_explanation='# Technical Explanation\n\n## Overall Technical Architecture\n\nThis system studies a new method.' * 200,
+            analysis_status='Ready',
+            ai_model='mock',
+        )
+
+        long_response = '{"technical_explanation":"' + ('This is a full technical lecture paragraph. ' * 90) + '","beginner_explanation":"A simple explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"A bit technical"},"glossary":[],"flashcards":[],"viva_questions":[]}'
+        bad_response = '```json\n{\x1b"technical_explanation": "# Technical Explanation\\n\\n## Research Objective\\n\\nThis is invalid because the control character is embedded."}\n```'
+        mock_generate.side_effect = [bad_response, long_response]
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('paper_technical', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_generate.call_count, 2)
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertIn('This is a full technical lecture paragraph', analysis.technical_explanation)
+
     @override_settings(AI_PROVIDER='mock')
     def test_start_learning_extracts_text_and_marks_paper_ready(self):
         user = User.objects.create_user(username='learner', password='Secret123')
@@ -240,6 +335,95 @@ class PaperUploadTests(TestCase):
         analysis = AIAnalysis.objects.get(paper=paper)
         self.assertEqual(analysis.overview, existing_analysis.overview)
         self.assertEqual(analysis.analysis_status, 'Failed')
+
+    def test_retry_generation_reuses_existing_content_and_shows_retry_button(self):
+        user = User.objects.create_user(username='retryuser', password='Secret123')
+        paper = Paper.objects.create(
+            owner=user,
+            title='Retry Paper',
+            pdf_file=SimpleUploadedFile('retry.pdf', b'%PDF-1.4\n', content_type='application/pdf'),
+        )
+        PaperContent.objects.create(paper=paper, extracted_text='Existing extracted text', extraction_status='Ready')
+        AIAnalysis.objects.create(paper=paper, analysis_status='Failed', analysis_error='Rate limit exceeded')
+
+        self.client.force_login(user)
+        with patch('papers.views.extract_pdf_content', side_effect=AssertionError('should not extract again')), patch('papers.views.process_mock_ai', return_value=SimpleNamespace(analysis_status='Failed')):
+            response = self.client.post(reverse('start_learning', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Retry AI Generation')
+        self.assertNotContains(response, 'Traceback')
+
+    def test_authentication_errors_with_rate_limit_words_do_not_show_usage_limit_message(self):
+        analysis = SimpleNamespace(
+            analysis_error='Authentication failed. The API key is invalid and the provider also mentioned rate limit exceeded.'
+        )
+
+        self.assertEqual(
+            _get_user_facing_error_message(analysis),
+            'AI analysis could not be completed. Authentication with the AI provider failed. Please check the API configuration.'
+        )
+
+    def test_non_rate_limit_provider_errors_do_not_show_usage_limit_message(self):
+        analysis = SimpleNamespace(analysis_error='The provider returned an unexpected error. Please try again later.')
+
+        self.assertEqual(
+            _get_user_facing_error_message(analysis),
+            'AI analysis could not be completed. Please try again later.'
+        )
+
+    def test_failed_generation_page_shows_single_clear_error_banner(self):
+        user = User.objects.create_user(username='errorbanner', password='Secret123')
+        paper = Paper.objects.create(
+            owner=user,
+            title='Error Banner Paper',
+            pdf_file=SimpleUploadedFile('banner.pdf', b'%PDF-1.4\n', content_type='application/pdf'),
+        )
+        AIAnalysis.objects.create(paper=paper, analysis_status='Failed', analysis_error='Rate limit exceeded')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'We could not complete AI generation.')
+        self.assertContains(response, 'AI analysis could not be completed')
+        self.assertNotContains(response, 'AI generation could not be completed.')
+
+    def test_validate_json_response_ignores_control_characters_before_parsing(self):
+        raw_response = '```json\n{\x1b"technical_explanation": "# Technical Explanation\\n\\n## Research Objective\\n\\nThis is a valid explanation."}\n```'
+
+        valid, payload, error_message = validate_json_response(raw_response)
+
+        self.assertTrue(valid)
+        self.assertEqual(payload['technical_explanation'], '# Technical Explanation\n\n## Research Objective\n\nThis is a valid explanation.')
+        self.assertEqual(error_message, '')
+
+    @override_settings(AI_PROVIDER='groq', GROQ_API_KEY='test-key', GROQ_MODEL='llama-3.3-70b-versatile')
+    def test_regenerating_failed_analysis_resets_state_before_new_provider_request(self):
+        user = User.objects.create_user(username='regenstate', password='Secret123')
+        paper = Paper.objects.create(
+            owner=user,
+            title='Regeneration Paper',
+            pdf_file=SimpleUploadedFile('regen.pdf', b'%PDF-1.4\n', content_type='application/pdf'),
+        )
+        PaperContent.objects.create(paper=paper, extracted_text='Paper content for regeneration', extraction_status='Ready')
+        analysis = AIAnalysis.objects.create(paper=paper, analysis_status='Failed', analysis_error='old error', raw_response='stale response')
+
+        def fake_generate(prompt):
+            refreshed = AIAnalysis.objects.get(pk=analysis.pk)
+            self.assertEqual(refreshed.analysis_status, 'Processing')
+            self.assertEqual(refreshed.analysis_error, '')
+            self.assertEqual(refreshed.raw_response, '')
+            return '{"beginner_explanation":"Fresh explanation","technical_explanation":"Fresh technical explanation","key_contributions":["Fresh contribution"],"key_concepts":["Fresh concept"],"reading_difficulty":{"level":"Intermediate","reason":"Refreshed"},"glossary":[],"flashcards":[],"viva_questions":[]}'
+
+        with patch('papers.ai_providers.GroqProvider.generate', side_effect=fake_generate):
+            self.client.force_login(user)
+            response = self.client.post(reverse('start_learning', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        refreshed = AIAnalysis.objects.get(pk=analysis.pk)
+        self.assertEqual(refreshed.analysis_status, 'Ready')
+        self.assertEqual(refreshed.analysis_error, '')
 
     def test_ai_foundation_relationships_are_available(self):
         user = User.objects.create_user(username='foundationuser', password='Secret123')

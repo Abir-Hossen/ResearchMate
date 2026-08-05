@@ -116,13 +116,9 @@ class GroqPayloadParser:
 
     required_fields = {
         'beginner_explanation',
-        'technical_explanation',
         'key_contributions',
         'key_concepts',
         'reading_difficulty',
-        'glossary',
-        'flashcards',
-        'viva_questions',
     }
 
     def __init__(self, payload):
@@ -144,7 +140,7 @@ class GroqPayloadParser:
         analysis, created = AIAnalysis.objects.get_or_create(paper=paper)
         analysis.overview = self.payload.get('beginner_explanation', '')
         analysis.beginner_explanation = self.payload.get('beginner_explanation', '')
-        analysis.technical_explanation = self.payload.get('technical_explanation', '')
+        analysis.technical_explanation = ''
         analysis.key_contributions = '\n'.join(self.payload.get('key_contributions', []))
         analysis.key_concepts = self.payload.get('key_concepts', [])
 
@@ -213,13 +209,13 @@ class GroqPayloadParser:
         progress, created = LearningProgress.objects.get_or_create(paper=paper)
         progress.overview_completed = True
         progress.beginner_completed = True
-        progress.technical_completed = True
-        progress.glossary_completed = True
-        progress.flashcards_completed = True
-        progress.quiz_completed = True
-        progress.viva_completed = True
+        progress.technical_completed = False
+        progress.glossary_completed = bool(self.payload.get('glossary'))
+        progress.flashcards_completed = bool(self.payload.get('flashcards'))
+        progress.quiz_completed = bool(self.payload.get('quiz_questions'))
+        progress.viva_completed = bool(self.payload.get('viva_questions'))
         progress.notes_completed = False
-        progress.overall_progress = 100
+        progress.overall_progress = 50
         progress.last_accessed = timezone.now()
         progress.save()
 

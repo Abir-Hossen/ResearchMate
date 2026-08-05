@@ -23,6 +23,9 @@ def validate_json_response(raw_response: Any) -> Tuple[bool, Any, str]:
     if candidate.startswith('```'):
         candidate = re.sub(r'^```(?:json)?\s*|\s*```$', '', candidate, flags=re.IGNORECASE | re.MULTILINE)
 
+    candidate = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', candidate)
+    candidate = candidate.replace('\u0000', '')
+
     start = candidate.find('{')
     end = candidate.rfind('}')
     if start != -1 and end > start:

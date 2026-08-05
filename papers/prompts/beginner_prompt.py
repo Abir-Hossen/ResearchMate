@@ -46,6 +46,7 @@ Writing instructions for the beginner explanation:
 - Make the explanation feel like a guided university lesson.
 - Do not write a short summary.
 - Do not include extra sections outside the requested structure.
+- Do not generate glossary, flashcards, quiz, viva, or technical explanation content in this response.
 
 Paper text:
 {extracted_text[:12000]}
