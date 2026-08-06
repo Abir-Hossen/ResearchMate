@@ -1,4 +1,7 @@
+import os
+import tempfile
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -8,8 +11,9 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from reportlab.pdfgen import canvas
 
-from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, QuizQuestion, VivaQuestion
+from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, PaperSection, QuizQuestion, VivaQuestion
 from .prompts.beginner import build_beginner_prompt
+from .prompts.section_learning import build_section_learning_prompt
 from .prompts.technical import build_technical_prompt
 from .response_validator import validate_json_response
 from .services import _get_user_facing_error_message
@@ -32,6 +36,23 @@ class GroqConnectivityTests(TestCase):
         self.assertContains(response, 'AI response')
         self.assertContains(response, 'Response time')
         self.assertContains(response, 'Groq connected')
+
+    def test_load_env_file_refreshes_groq_settings(self):
+        from ResearchMate import settings as project_settings
+
+        with tempfile.NamedTemporaryFile('w', delete=False, dir=str(project_settings.BASE_DIR), encoding='utf-8') as handle:
+            handle.write('GROQ_API_KEY=test-from-env\n')
+            handle.write('GROQ_MODEL=test-model\n')
+            handle.write('AI_PROVIDER=groq\n')
+            temp_path = Path(handle.name)
+
+        try:
+            project_settings.load_env_file(env_file=temp_path)
+            self.assertEqual(os.environ['GROQ_API_KEY'], 'test-from-env')
+            self.assertEqual(project_settings.GROQ_API_KEY, 'test-from-env')
+            self.assertEqual(project_settings.GROQ_MODEL, 'test-model')
+        finally:
+            temp_path.unlink(missing_ok=True)
 
 
 class PaperUploadTests(TestCase):
@@ -185,6 +206,226 @@ class PaperUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Generate Technical Explanation')
         self.assertNotContains(response, 'Run Start Learning to generate a technical explanation.')
+
+    def test_section_learning_prompt_requests_section_json_schema(self):
+        prompt = build_section_learning_prompt('A sample paper about neural networks.')
+
+        self.assertIn('"sections"', prompt)
+        self.assertIn('"title"', prompt)
+        self.assertIn('"summary"', prompt)
+        self.assertIn('"purpose"', prompt)
+        self.assertIn('"key_points"', prompt)
+        self.assertIn('"important_terms"', prompt)
+        self.assertIn('"student_note"', prompt)
+        self.assertIn('Return ONLY valid JSON', prompt)
+        self.assertIn('every major section', prompt)
+        self.assertIn('Do not stop after Introduction or Related Work', prompt)
+        self.assertIn('cover the full paper', prompt)
+
+    def test_section_learning_prompt_compacts_large_section_text(self):
+        long_text = ' '.join(['token'] * 4000)
+
+        prompt = build_section_learning_prompt('Methods', long_text)
+
+        self.assertIn('Section text:', prompt)
+        self.assertIn('[truncated]', prompt)
+        self.assertLess(len(prompt), 12000)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature')
+    def test_section_learning_service_passes_raw_section_text_to_prompt_builder(self, mock_generate):
+        user = User.objects.create_user(username='sectionpayload', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Section Payload Paper', pdf_file=SimpleUploadedFile('section-payload.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='Introduction\nThis paper introduces the problem and the method.\n\nMethods\nThe system is implemented and tested on data.',
+            extraction_status='Ready',
+        )
+        mock_generate.side_effect = [
+            '{"sections":[{"title":"Introduction","order":1}]}',
+            '{"summary":"A concise explanation","purpose":"It introduces the work","key_points":["The problem is outlined"],"important_terms":["motivation"],"student_note":"Understand the motivation"}',
+        ]
+
+        from .section_learning_service import generate_section_learning
+
+        generate_section_learning(paper)
+
+        explanation_call = mock_generate.call_args_list[1]
+        self.assertEqual(explanation_call.args[0], 'section_learning')
+        self.assertEqual(explanation_call.args[1], 'This paper introduces the problem and the method.')
+        self.assertEqual(explanation_call.kwargs['prompt_type'], 'section_explanation')
+        self.assertEqual(explanation_call.kwargs['section_title'], 'Introduction')
+
+    def test_prepare_section_learning_text_compacts_large_input(self):
+        from .section_learning_service import _prepare_section_text
+
+        large_text = '\n'.join([f'Section {index} content ' + ('word ' * 120) for index in range(20)])
+
+        prepared = _prepare_section_text(large_text)
+
+        self.assertLessEqual(len(prepared), 6000)
+        self.assertIn('[truncated]', prepared)
+
+    def test_section_detection_and_single_section_prompt_helpers_exist(self):
+        from .prompt_manager import get_section_detection_prompt, get_single_section_explanation_prompt
+
+        detection_prompt = get_section_detection_prompt('Paper introduction and methods section text.')
+        section_prompt = get_single_section_explanation_prompt('Introduction', 'This section introduces the problem and outlines the approach.')
+
+        self.assertIn('Return ONLY valid JSON', detection_prompt)
+        self.assertIn('"sections"', detection_prompt)
+        self.assertIn('"title"', detection_prompt)
+        self.assertIn('summary', section_prompt)
+        self.assertIn('student_note', section_prompt)
+        self.assertNotIn('entire paper', detection_prompt.lower())
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate', side_effect=[
+        '{"sections":[{"heading":"Introduction","order":1},{"heading":"Methods","order":2}]}',
+        '{"summary":"This section introduces the topic and defines the problem clearly.","purpose":"It motivates the work and sets expectations for the reader.","key_points":["The problem is stated clearly.","The gap is explained.","The contribution is framed."],"important_terms":["problem setting","research gap","methodology"],"student_note":"Understand the motivation before reading the technical method."}',
+        '{"summary":"This section explains the implementation details and evaluation setup.","purpose":"It shows how the proposed system works and how it was tested.","key_points":["The algorithm is described.","The workflow is mapped out.","The evaluation choices are discussed."],"important_terms":["pipeline","evaluation","dataset"],"student_note":"Connect the method to the results because the evaluation depends on the design choices."}'
+    ])
+    def test_generate_section_learning_accepts_plain_string_titles(self, mock_generate):
+        user = User.objects.create_user(username='sectionstrings', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='String Titles Paper', pdf_file=SimpleUploadedFile('string-titles.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='Introduction. This paper studies a problem and motivates the approach.\n\nMethods. The system is implemented with a pipeline and evaluated on a dataset.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 2)
+        self.assertEqual(sections[0].title, 'Introduction')
+        self.assertEqual(sections[1].title, 'Methods')
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate', side_effect=[
+        '{"sections":[{"title":"Introduction","order":1},{"title":"Methods","order":2}]}',
+        '{"summary":"This section introduces the topic and defines the problem clearly.","purpose":"It motivates the work and sets expectations for the reader.","key_points":["The problem is stated clearly.","The gap is explained.","The contribution is framed."],"important_terms":["problem setting","research gap","methodology"],"student_note":"Understand the motivation before reading the technical method."}',
+        '{"summary":"This section explains the implementation details and evaluation setup.","purpose":"It shows how the proposed system works and how it was tested.","key_points":["The algorithm is described.","The workflow is mapped out.","The evaluation choices are discussed."],"important_terms":["pipeline","evaluation","dataset"],"student_note":"Connect the method to the results because the evaluation depends on the design choices."}'
+    ])
+    def test_generate_section_learning_uses_detection_then_single_section_explanations(self, mock_generate):
+        user = User.objects.create_user(username='sectionpipeline', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Section Pipeline Paper', pdf_file=SimpleUploadedFile('section-pipeline.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='Introduction. This paper studies a problem and motivates the approach.\n\nMethods. The system is implemented with a pipeline and evaluated on a dataset.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 2)
+        self.assertEqual(mock_generate.call_count, 3)
+        self.assertEqual(sections[0].title, 'Introduction')
+        self.assertEqual(sections[1].title, 'Methods')
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","order":1,"summary":"A brief overview of the work.","purpose":"It introduces the paper at a high level.","key_points":["The problem is summarized."],"important_terms":["overview"],"student_note":"Understand the main claim first."},{"title":"Introduction","order":2,"summary":"The motivation and context are explained.","purpose":"It frames the problem and the study goal.","key_points":["The gap is stated."],"important_terms":["motivation"],"student_note":"Connect the motivation to the method."},{"title":"Methods","order":3,"summary":"The approach is explained clearly.","purpose":"It describes how the study was conducted.","key_points":["A workflow is outlined."],"important_terms":["methodology"],"student_note":"Follow the workflow carefully."},{"title":"Results","order":4,"summary":"The findings are summarized.","purpose":"It reports what the study found.","key_points":["The outcome is described."],"important_terms":["findings"],"student_note":"Compare the findings to the method."},{"title":"Conclusion","order":5,"summary":"The study is wrapped up.","purpose":"It reinforces the main takeaway.","key_points":["The main lesson is captured."],"important_terms":["takeaway"],"student_note":"Remember the final message."}]}')
+    def test_generate_section_learning_uses_extracted_headings_when_available(self, mock_generate):
+        user = User.objects.create_user(username='sectionheadings', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Section Headings Paper', pdf_file=SimpleUploadedFile('section-headings.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='Abstract\nThis paper studies a new method.\n\nIntroduction\nThe problem is introduced here.\n\nMethods\nThe implementation details are described here.\n\nResults\nThe findings are presented here.\n\nConclusion\nThe paper is concluded here.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual([section.title for section in sections], ['Abstract', 'Introduction', 'Methods', 'Results', 'Conclusion'])
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","order":1,"summary":"This section introduces the research problem, explains the gap in prior systems, and motivates the proposed solution by emphasizing the practical constraints and limitations that motivate the study in a concrete way.","purpose":"It establishes why the problem matters, defines the context for the paper, and prepares the reader to understand the technical decisions that follow.","key_points":["The paper identifies a gap in current approaches.","The problem is framed around real-world limitations.","The study motivates a more robust technical design."],"important_terms":["research gap","problem setting","baseline systems"],"student_note":"Understand the motivation and the specific weakness the paper addresses before reading the design section, because the later method depends on this framing."}]}')
+    def test_generate_section_learning_persists_and_reuses_database_value(self, mock_generate):
+        user = User.objects.create_user(username='sectionuser', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Section Learning Paper', pdf_file=SimpleUploadedFile('section-learning.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for section learning.', extraction_status='Ready')
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+        self.assertEqual(len(sections), 1)
+        self.assertEqual(mock_generate.call_count, 1)
+        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 1)
+        self.assertEqual(PaperSection.objects.get(paper=paper, title='Introduction').section_order, 1)
+
+        sections_again = generate_section_learning(paper)
+        self.assertEqual(len(sections_again), 1)
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', side_effect=Exception('Error code: 429 - {"error": {"message": "Rate limit reached for model `llama-3.3-70b-versatile` ..."}}'))
+    def test_generate_section_learning_handles_groq_rate_limit_gracefully(self, mock_generate):
+        user = User.objects.create_user(username='sectionratelimit', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Section Rate Limit Paper', pdf_file=SimpleUploadedFile('section-rate-limit.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for section learning.', extraction_status='Ready')
+
+        from .section_learning_service import SectionLearningError, generate_section_learning
+
+        with self.assertRaises(SectionLearningError) as exc:
+            generate_section_learning(paper)
+
+        self.assertIn('daily token limit', str(exc.exception).lower())
+        self.assertIn('rate limit', str(exc.exception).lower())
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","order":1,"summary":"This section motivates the problem and explains why the work matters.","purpose":"It introduces the research problem and its significance.","key_points":["The paper identifies a practical gap.","The authors define the task clearly."],"important_terms":["problem setting","research gap"],"student_note":"Understand the problem before the method."}]}')
+    def test_section_learning_page_renders_generated_sections(self, mock_generate):
+        user = User.objects.create_user(username='sectionpage', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Section Page Paper', pdf_file=SimpleUploadedFile('section-page.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for section learning.', extraction_status='Ready')
+        PaperSection.objects.create(
+            paper=paper,
+            title='Introduction',
+            section_order=1,
+            summary='This section motivates the problem and explains why the work matters.',
+            purpose='It introduces the research problem and its significance.',
+            key_points=['The paper identifies a practical gap.', 'The authors define the task clearly.'],
+            important_terms=['problem setting', 'research gap'],
+            student_note='Understand the problem before the method.',
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_sections', args=[paper.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Introduction')
+        self.assertContains(response, 'This section motivates the problem and explains why the work matters.')
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","order":1,"summary":"This section frames the research problem, shows why prior methods fall short, and motivates the proposed approach by highlighting the limitations of current systems and the practical need for a stronger technical solution.","purpose":"It sets the research context and explains why the work matters, preparing the reader to understand the design decisions that follow in the rest of the paper.","key_points":["The authors describe a gap in existing methods.","The practical limitations of current systems are emphasized.","The study motivates a more robust design."],"important_terms":["research gap","baseline systems","problem setting"],"student_note":"Understand the motivation and the exact weakness the paper addresses before reading the method, because the design choices depend directly on this framing."},{"title":"Methods","order":2,"summary":"The methods section explains the architecture, data flow, and training strategy used to implement the proposed system, connecting each design choice to the research objective and expected behavior.","purpose":"It shows how the proposed solution is operationalized and why the chosen components, assumptions, and procedures are necessary to achieve the stated goal.","key_points":["The method defines the core architecture and pipeline.","Design decisions are tied to the problem statement.","The section explains how the contribution is implemented in practice."],"important_terms":["architecture","training pipeline","objective function"],"student_note":"Focus on how the architecture addresses the problem and which components are essential, since the later results are interpreted through this design."}]}')
+    def test_generate_section_learning_force_refresh_replaces_outdated_sections(self, mock_generate):
+        user = User.objects.create_user(username='sectionrefresh', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Section Refresh Paper', pdf_file=SimpleUploadedFile('section-refresh.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper includes an introduction and a methods section with technical details.', extraction_status='Ready')
+        PaperSection.objects.create(
+            paper=paper,
+            title='Introduction',
+            section_order=1,
+            summary='Short generic intro.',
+            purpose='Short generic purpose.',
+            key_points=['generic'],
+            important_terms=['generic'],
+            student_note='Need the basic idea.',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper, force_refresh=True)
+        self.assertEqual(len(sections), 2)
+        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 2)
+        self.assertEqual(mock_generate.call_count, 1)
+        self.assertTrue(any(section.title == 'Methods' for section in sections))
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.ai_providers.MockProvider.generate', return_value='{"technical_explanation":"# Technical Explanation\\n\\n## Overall Technical Architecture\\n\\n' + ('This is a complete technical lecture note. ' * 80) + '\\n\\n## Model Architecture\\n\\nThis section teaches the background concepts needed to understand the paper. ","beginner_explanation":"A simple explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"A bit technical"},"glossary":[],"flashcards":[],"viva_questions":[]}')

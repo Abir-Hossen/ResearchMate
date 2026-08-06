@@ -17,12 +17,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 import os
 
-# Load simple .env file if present (KEY=VALUE lines). This avoids adding new
-# dependencies while allowing local API keys to be set for development.
-env_file = BASE_DIR / '.env'
-if env_file.exists():
+
+def refresh_settings_from_env():
+    global GROQ_API_KEY, GROQ_MODEL, AI_PROVIDER
+    GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+    GROQ_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+    AI_PROVIDER = os.getenv('AI_PROVIDER', 'groq')
+
+
+def load_env_file(env_file=None):
+    """Load Groq-related values from the local .env file without relying on a stale process environment."""
+    resolved_env_file = Path(env_file) if env_file is not None else BASE_DIR / '.env'
+    if not resolved_env_file.exists():
+        refresh_settings_from_env()
+        return False
+
     try:
-        for raw in env_file.read_text(encoding='utf8').splitlines():
+        for raw in resolved_env_file.read_text(encoding='utf8').splitlines():
             line = raw.strip()
             if not line or line.startswith('#'):
                 continue
@@ -31,16 +42,24 @@ if env_file.exists():
             key, val = line.split('=', 1)
             key = key.strip()
             val = val.strip().strip('"').strip("'")
-            if key and key not in os.environ:
+            if key in {'GROQ_API_KEY', 'GROQ_MODEL', 'AI_PROVIDER'} or key not in os.environ:
                 os.environ[key] = val
     except Exception:
-        # If anything goes wrong reading .env, continue without failing startup.
-        pass
+        refresh_settings_from_env()
+        return False
+
+    refresh_settings_from_env()
+    return True
+
+
+# Load simple .env file if present (KEY=VALUE lines). This avoids adding new
+# dependencies while allowing local API keys to be set for development.
+# For project-specific settings like the Groq key, prefer the local .env file so
+# a stale OS environment variable cannot keep sending an old key after updates.
+load_env_file()
 
 # Expose Groq settings in settings for easy access by services.
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-GROQ_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
-AI_PROVIDER = os.getenv('AI_PROVIDER', 'groq')
+refresh_settings_from_env()
 
 
 # Quick-start development settings - unsuitable for production

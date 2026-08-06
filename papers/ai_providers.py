@@ -67,6 +67,9 @@ class GroqProvider(BaseProvider):
 
     def __init__(self):
         super().__init__()
+        from ResearchMate import settings as project_settings
+
+        project_settings.load_env_file()
         api_key = getattr(settings, 'GROQ_API_KEY', None)
         if not api_key:
             raise ImproperlyConfigured('GROQ_API_KEY is not configured.')

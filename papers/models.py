@@ -132,6 +132,28 @@ class VivaQuestion(models.Model):
         return self.question[:80]
 
 
+class PaperSection(models.Model):
+    paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='section_learning_sections')
+    title = models.CharField(max_length=255)
+    section_order = models.PositiveIntegerField(default=0)
+    original_text = models.TextField(blank=True)
+    summary = models.TextField(blank=True)
+    purpose = models.TextField(blank=True)
+    key_points = models.JSONField(default=list, blank=True)
+    important_terms = models.JSONField(default=list, blank=True)
+    student_note = models.TextField(blank=True)
+    is_generated = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['section_order', 'id']
+        indexes = [models.Index(fields=['paper', 'section_order'])]
+
+    def __str__(self):
+        return f'{self.title} ({self.paper.title})'
+
+
 class LearningProgress(models.Model):
     paper = models.OneToOneField(Paper, on_delete=models.CASCADE, related_name='learning_progress')
     overview_completed = models.BooleanField(default=False)

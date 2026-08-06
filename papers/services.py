@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover - environment fallback
 from .ai_service import AIService
 from .groq_connectivity import GroqLearningService as BaseGroqLearningService
 from .provider_factory import ProviderFactory
-from .models import AIAnalysis, Paper, PaperContent
+from .models import AIAnalysis, Paper, PaperContent, PaperSection
 from .parser import GroqPayloadParser, MockPayloadParser
 from .response_validator import validate_json_response
 
@@ -105,6 +105,7 @@ def build_workspace_context(user, paper_id, active_tab):
     flashcards = []
     quiz_questions = []
     viva_questions = []
+    section_learning_sections = []
     analysis_contributions = []
 
     if analysis is not None:
@@ -115,6 +116,7 @@ def build_workspace_context(user, paper_id, active_tab):
         flashcards = list(paper.flashcards.all().order_by('display_order', 'id'))
         quiz_questions = list(paper.quiz_questions.all().order_by('display_order', 'id'))
         viva_questions = list(paper.viva_questions.all().order_by('display_order', 'id'))
+        section_learning_sections = list(paper.section_learning_sections.all().order_by('section_order', 'id'))
     except ObjectDoesNotExist:
         pass
 
@@ -129,6 +131,7 @@ def build_workspace_context(user, paper_id, active_tab):
         'flashcards': flashcards,
         'quiz_questions': quiz_questions,
         'viva_questions': viva_questions,
+        'section_learning_sections': section_learning_sections,
         'analysis_contributions': analysis_contributions,
     }
 

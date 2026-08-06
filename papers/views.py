@@ -15,6 +15,7 @@ from .services import (
     get_user_paper,
     process_mock_ai,
 )
+from .section_learning_service import SectionLearningError, generate_section_learning
 from .technical_service import TechnicalExplanationError, generate_technical_explanation
 from .utils import format_file_size
 from django.http import HttpResponse
@@ -128,6 +129,17 @@ def paper_technical(request, paper_id):
 
 @login_required(login_url='login')
 def paper_sections(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+
+    if request.method == 'POST':
+        try:
+            generate_section_learning(paper, force_refresh=True)
+            messages.success(request, 'Section Learning generated successfully.')
+        except SectionLearningError as exc:
+            logger.warning('Paper ID %s: section learning generation failed: %s', paper.id, exc)
+            messages.error(request, str(exc))
+        return redirect('paper_sections', paper_id=paper.id)
+
     context = build_workspace_context(request.user, paper_id, 'sections')
     return render(request, 'papers/workspace/sections.html', context)
 
