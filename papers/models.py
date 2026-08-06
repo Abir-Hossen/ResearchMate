@@ -139,6 +139,7 @@ class PaperSection(models.Model):
     original_text = models.TextField(blank=True)
     summary = models.TextField(blank=True)
     purpose = models.TextField(blank=True)
+    conclusion = models.TextField(blank=True)
     key_points = models.JSONField(default=list, blank=True)
     important_terms = models.JSONField(default=list, blank=True)
     student_note = models.TextField(blank=True)

@@ -50,6 +50,7 @@ def _normalize_section_payload(raw_section, fallback_title, fallback_order):
 
     summary = str(raw_section.get('summary') or '').strip()
     purpose = str(raw_section.get('purpose') or '').strip()
+    conclusion = str(raw_section.get('conclusion') or '').strip()
     key_points = _coerce_list(raw_section.get('key_points'))
     important_terms = _coerce_list(raw_section.get('important_terms'))
     student_note = str(raw_section.get('student_note') or '').strip()
@@ -67,6 +68,7 @@ def _normalize_section_payload(raw_section, fallback_title, fallback_order):
         'order': int(raw_section.get('order') or fallback_order),
         'summary': summary,
         'purpose': purpose,
+        'conclusion': conclusion,
         'key_points': key_points,
         'important_terms': important_terms,
         'student_note': student_note,
@@ -84,6 +86,7 @@ def _coerce_section_payload(item, fallback_title, fallback_order):
         'order': order_value,
         'summary': str(item.get('summary') or '').strip(),
         'purpose': str(item.get('purpose') or '').strip(),
+        'conclusion': str(item.get('conclusion') or '').strip(),
         'key_points': _coerce_list(item.get('key_points')),
         'important_terms': _coerce_list(item.get('important_terms')),
         'student_note': str(item.get('student_note') or '').strip(),
@@ -224,6 +227,7 @@ def _persist_section_learning(paper, cleaned_sections):
             original_text=item.get('original_text', ''),
             summary=item['summary'],
             purpose=item['purpose'],
+            conclusion=item.get('conclusion', ''),
             key_points=item['key_points'],
             important_terms=item['important_terms'],
             student_note=item['student_note'],
@@ -287,6 +291,7 @@ def generate_section_learning(paper, force_refresh=False):
             section_text = _find_section_text(parsed_sections, section_title) or content.extracted_text
             summary = str(detected_section.get('summary') or '').strip()
             purpose = str(detected_section.get('purpose') or '').strip()
+            conclusion = str(detected_section.get('conclusion') or '').strip()
             key_points = _coerce_list(detected_section.get('key_points'))
             important_terms = _coerce_list(detected_section.get('important_terms'))
             student_note = str(detected_section.get('student_note') or '').strip()
@@ -304,6 +309,7 @@ def generate_section_learning(paper, force_refresh=False):
                 if valid_explanation and isinstance(explanation_payload, dict):
                     summary = str(explanation_payload.get('summary') or '').strip()
                     purpose = str(explanation_payload.get('purpose') or '').strip()
+                    conclusion = str(explanation_payload.get('conclusion') or '').strip()
                     key_points = _coerce_list(explanation_payload.get('key_points'))
                     important_terms = _coerce_list(explanation_payload.get('important_terms'))
                     student_note = str(explanation_payload.get('student_note') or '').strip()
@@ -315,6 +321,7 @@ def generate_section_learning(paper, force_refresh=False):
                 'order': index,
                 'summary': summary,
                 'purpose': purpose,
+                'conclusion': conclusion,
                 'key_points': key_points,
                 'important_terms': important_terms,
                 'student_note': student_note,
@@ -336,12 +343,14 @@ def generate_section_learning(paper, force_refresh=False):
             if valid_explanation and isinstance(explanation_payload, dict):
                 summary = str(explanation_payload.get('summary') or '').strip()
                 purpose = str(explanation_payload.get('purpose') or '').strip()
+                conclusion = str(explanation_payload.get('conclusion') or '').strip()
                 key_points = _coerce_list(explanation_payload.get('key_points'))
                 important_terms = _coerce_list(explanation_payload.get('important_terms'))
                 student_note = str(explanation_payload.get('student_note') or '').strip()
             else:
                 summary = str(explanation_response or '').strip()
                 purpose = ''
+                conclusion = ''
                 key_points = []
                 important_terms = []
                 student_note = ''
@@ -351,6 +360,7 @@ def generate_section_learning(paper, force_refresh=False):
                 'order': index,
                 'summary': summary,
                 'purpose': purpose,
+                'conclusion': conclusion,
                 'key_points': key_points,
                 'important_terms': important_terms,
                 'student_note': student_note,

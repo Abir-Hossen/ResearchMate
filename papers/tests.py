@@ -232,6 +232,27 @@ class PaperUploadTests(TestCase):
         self.assertLess(len(prompt), 12000)
 
     @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', side_effect=[
+        '{"sections":[{"title":"Conclusion","order":1}]}',
+        '{"summary":"A concise explanation","purpose":"It wraps up the main point","key_points":["The takeaway is clear"],"important_terms":["takeaway"],"student_note":"Remember the main message","conclusion":"This section closes the learning loop by reinforcing the core takeaway."}',
+    ])
+    def test_generate_section_learning_persists_conclusion(self, mock_generate):
+        user = User.objects.create_user(username='sectionconclusion', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Section Conclusion Paper', pdf_file=SimpleUploadedFile('section-conclusion.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='Conclusion\nThis section closes the discussion and reinforces the main takeaway.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 1)
+        self.assertEqual(sections[0].conclusion, 'This section closes the learning loop by reinforcing the core takeaway.')
+
+    @override_settings(AI_PROVIDER='mock')
     @patch('papers.section_learning_service.AIService.generate_feature')
     def test_section_learning_service_passes_raw_section_text_to_prompt_builder(self, mock_generate):
         user = User.objects.create_user(username='sectionpayload', password='Secret123')

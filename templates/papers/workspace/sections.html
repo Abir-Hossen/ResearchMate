@@ -44,6 +44,12 @@
                                         {% endfor %}
                                     </ul>
                                 </div>
+                                {% if section.conclusion %}
+                                <div class="mb-3">
+                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Conclusion</h6>
+                                    <p class="mb-0">{{ section.conclusion }}</p>
+                                </div>
+                                {% endif %}
                                 <div>
                                     <h6 class="text-uppercase text-muted fw-semibold mb-2">Student Note</h6>
                                     <p class="mb-0">{{ section.student_note }}</p>
