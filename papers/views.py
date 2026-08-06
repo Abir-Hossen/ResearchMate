@@ -6,6 +6,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import PaperUploadForm
+from .glossary_service import GlossaryGenerationError, generate_glossary
 from .models import Paper
 from .services import (
     _get_user_facing_error_message,
@@ -146,6 +147,17 @@ def paper_sections(request, paper_id):
 
 @login_required(login_url='login')
 def paper_glossary(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+
+    if request.method == 'POST':
+        try:
+            generate_glossary(paper)
+            messages.success(request, 'Glossary generated successfully.')
+        except GlossaryGenerationError as exc:
+            logger.warning('Paper ID %s: glossary generation failed: %s', paper.id, exc)
+            messages.error(request, str(exc))
+        return redirect('paper_glossary', paper_id=paper.id)
+
     context = build_workspace_context(request.user, paper_id, 'glossary')
     return render(request, 'papers/workspace/glossary.html', context)
 

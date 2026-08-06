@@ -13,6 +13,7 @@ from reportlab.pdfgen import canvas
 
 from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, PaperSection, QuizQuestion, VivaQuestion
 from .prompts.beginner import build_beginner_prompt
+from .prompts.glossary import build_glossary_prompt
 from .prompts.section_learning import build_section_learning_prompt
 from .prompts.technical import build_technical_prompt
 from .response_validator import validate_json_response
@@ -447,6 +448,69 @@ class PaperUploadTests(TestCase):
         self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 2)
         self.assertEqual(mock_generate.call_count, 1)
         self.assertTrue(any(section.title == 'Methods' for section in sections))
+
+    def test_glossary_prompt_requests_paper_specific_markdown_output(self):
+        prompt = build_glossary_prompt('A paper about convolutional networks and transformers.')
+
+        self.assertIn('university teaching assistant', prompt.lower())
+        self.assertIn('15–20 glossary entries', prompt)
+        self.assertIn('Role in This Paper', prompt)
+        self.assertIn('# AI Glossary', prompt)
+        self.assertIn('Return Markdown', prompt)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.glossary_service.AIService.generate_feature', return_value='''# AI Glossary\n\n## CNN (Convolutional Neural Network)\n\n### Explanation\nCNNs are neural networks that scan local patterns in data. They are useful for recognizing structure in images and other spatial signals. The key idea is that the model learns filters that respond to repeated features rather than relying on hand-crafted rules.\n\n### Role in This Paper\nThe paper uses CNNs as the core feature extractor for the proposed architecture.\n\n---\n\n## Transformer\n\n### Explanation\nTransformers use attention to connect distant parts of an input sequence. They are especially strong when the model needs to reason about relationships between many tokens.\n\n### Role in This Paper\nThe paper does not explicitly describe how this concept is used.''')
+    def test_generate_glossary_persists_entries_and_reuses_database_value(self, mock_generate):
+        user = User.objects.create_user(username='glossarygen', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Glossary Generate Paper', pdf_file=SimpleUploadedFile('glossary-generate.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies convolutional networks and transformers for image analysis.', extraction_status='Ready')
+
+        from .glossary_service import generate_glossary
+
+        entries = generate_glossary(paper)
+
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(Glossary.objects.filter(paper=paper).count(), 2)
+        self.assertEqual(Glossary.objects.get(paper=paper, term='CNN').paper_role, 'The paper uses CNNs as the core feature extractor for the proposed architecture.')
+        self.assertEqual(mock_generate.call_count, 1)
+
+        entries_again = generate_glossary(paper)
+        self.assertEqual(mock_generate.call_count, 2)
+        self.assertEqual(len(entries_again), 2)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.glossary_service.AIService.generate_feature', return_value='''# AI Glossary\n\n## Transformer\n\n### Explanation\nTransformers use attention to connect distant parts of an input sequence.\n\n### Role in This Paper\nThe paper uses transformers in the proposed architecture.''')
+    def test_generate_glossary_replaces_existing_entries_when_requested(self, mock_generate):
+        user = User.objects.create_user(username='glossaryreplace', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Glossary Replace Paper', pdf_file=SimpleUploadedFile('glossary-replace.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies transformers for sequence modeling.', extraction_status='Ready')
+        Glossary.objects.create(paper=paper, term='Old Term', explanation='Old explanation', paper_role='Old role', display_order=1)
+
+        from .glossary_service import generate_glossary
+
+        entries = generate_glossary(paper)
+
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(Glossary.objects.filter(paper=paper).count(), 1)
+        self.assertEqual(Glossary.objects.get(paper=paper).term, 'Transformer')
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.glossary_service.AIService.generate_feature', return_value='''# AI Glossary\n\n## CNN (Convolutional Neural Network)\n\n### Explanation\nCNNs are neural networks that scan local patterns in data.\n\n### Role in This Paper\nThe paper uses CNNs as the core feature extractor for the proposed architecture.''')
+    def test_glossary_page_shows_generate_button_and_generated_cards(self, mock_generate):
+        user = User.objects.create_user(username='glossaryview', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Glossary View Paper', pdf_file=SimpleUploadedFile('glossary-view.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies convolutional networks for image analysis.', extraction_status='Ready')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_glossary', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Generate Glossary')
+
+        response = self.client.post(reverse('paper_glossary', args=[paper.pk]), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'CNN')
+        self.assertContains(response, 'Role in This Paper')
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.ai_providers.MockProvider.generate', return_value='{"technical_explanation":"# Technical Explanation\\n\\n## Overall Technical Architecture\\n\\n' + ('This is a complete technical lecture note. ' * 80) + '\\n\\n## Model Architecture\\n\\nThis section teaches the background concepts needed to understand the paper. ","beginner_explanation":"A simple explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"A bit technical"},"glossary":[],"flashcards":[],"viva_questions":[]}')

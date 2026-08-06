@@ -68,17 +68,17 @@ class AIAnalysis(models.Model):
 class Glossary(models.Model):
     paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='glossary_terms')
     term = models.CharField(max_length=255)
+    explanation = models.TextField(blank=True)
+    paper_role = models.TextField(blank=True)
     simple_explanation = models.TextField(blank=True)
     technical_explanation = models.TextField(blank=True)
     example = models.TextField(blank=True)
     display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['display_order', 'id']
         indexes = [models.Index(fields=['paper', 'display_order'])]
-
-    class Meta:
-        ordering = ['display_order', 'id']
 
     def __str__(self):
         return self.term

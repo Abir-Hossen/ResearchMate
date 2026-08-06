@@ -105,7 +105,7 @@ class GlossaryAdmin(admin.ModelAdmin):
             'fields': ('paper', 'term', 'display_order')
         }),
         ('Content', {
-            'fields': ('simple_explanation', 'technical_explanation', 'example')
+            'fields': ('explanation', 'paper_role', 'simple_explanation', 'technical_explanation', 'example')
         }),
     )
 
