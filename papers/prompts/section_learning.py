@@ -60,18 +60,23 @@ Section text:
 
 Return ONLY valid JSON with this schema:
 {{
-  "summary": "A concise explanation",
-  "purpose": "Why this section exists",
-  "key_points": ["..."],
-  "important_terms": ["..."],
-  "student_note": "What the student should understand"
+  "summary": "A detailed but concise explanation of what the section says and why it matters",
+  "purpose": "Why this section exists in the paper and what role it plays for the reader",
+  "conclusion": "A short closing takeaway that reinforces the main point of the section",
+  "key_points": ["A specific insight from the section", "A second specific insight from the section", "A third specific insight from the section"],
+  "important_terms": ["A technical or domain-specific term from the section"],
+  "student_note": "What the student should understand after reading this section"
 }}
 
 Rules:
 - Do not copy text from the paper.
 - Do not write generic explanations.
 - Make the explanation specific to this section only.
-- Keep the answer concise and useful for studying.
+- Include concrete details whenever the section mentions methods, architecture, datasets, experiments, metrics, findings, limitations, or conclusions.
+- For methodology sections, mention the approach, components, workflow, or design choice.
+- For results/discussion sections, mention observed outcomes, evidence, metrics, limitations, or comparison points if they appear in the text.
+- Keep the answer concise but substantive.
+- Return valid JSON only.
 """
 
 
