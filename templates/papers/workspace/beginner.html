@@ -1,17 +1,104 @@
 {% extends 'papers/workspace/base_workspace.html' %}
+{% load papers_extras %}
 
 {% block workspace_content %}
-<div class="card border-0 shadow-sm">
-    <div class="card-body">
-        <h4 class="h5">Beginner Explanation</h4>
+<div class="card border-0 shadow-sm beginner-shell">
+    <div class="card-body p-4 p-lg-5">
+        <div class="mb-4">
+            <p class="text-uppercase text-muted fw-semibold mb-2 letter-space">Beginner Explanation</p>
+            <h4 class="display-6 fw-bold mb-3">Beginner Explanation</h4>
+            <p class="lead text-muted mb-0">Understand the paper from the ground up using simple language and guided explanations.</p>
+        </div>
+
         {% if analysis and analysis.beginner_explanation %}
-            <p class="text-muted mb-3">A simple explanation generated for this paper.</p>
-            <div class="border rounded p-3 bg-light">
-                {{ analysis.beginner_explanation|linebreaksbr }}
-            </div>
+            <article class="beginner-article">
+                {{ analysis.beginner_explanation|render_beginner_markdown|safe }}
+            </article>
         {% else %}
-            <p class="text-muted mb-0">Run Start Learning to generate a beginner-friendly explanation.</p>
+            <div class="empty-state rounded-4 p-4 p-lg-5">
+                <p class="mb-0 text-muted">Run Start Learning to generate a beginner-friendly explanation for this paper.</p>
+            </div>
         {% endif %}
     </div>
 </div>
+
+<style>
+.beginner-shell {
+    border-radius: 1.25rem;
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.beginner-article {
+    max-width: 860px;
+    color: #17324d;
+    font-size: 1.02rem;
+    line-height: 1.75;
+}
+
+.beginner-article h2 {
+    margin-top: 1.75rem;
+    margin-bottom: 0.85rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0d3b66;
+    border-bottom: 2px solid #dbeafe;
+    padding-bottom: 0.35rem;
+}
+
+.beginner-article h2:first-child {
+    margin-top: 0;
+}
+
+.beginner-article p,
+.beginner-article li {
+    margin-bottom: 0.85rem;
+}
+
+.beginner-article p {
+    margin-bottom: 1rem;
+    text-align: justify;
+}
+
+.beginner-article ul,
+.beginner-article ol {
+    padding-left: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.beginner-article strong {
+    color: #0f4c81;
+    font-weight: 700;
+}
+
+.beginner-article .section-list {
+    padding-left: 1.4rem;
+}
+
+.beginner-article .section-list li {
+    margin-bottom: 0.6rem;
+}
+
+.beginner-article .section-title {
+    background: linear-gradient(90deg, #eff6ff 0%, #f8fbff 100%);
+    padding: 0.6rem 0.8rem;
+    border-radius: 0.6rem;
+    box-shadow: inset 0 0 0 1px #dbeafe;
+}
+
+.beginner-article blockquote {
+    border-left: 4px solid #60a5fa;
+    padding-left: 1rem;
+    color: #4b5563;
+    font-style: italic;
+}
+
+.empty-state {
+    border: 1px dashed #cbd5e1;
+    background: #fbfdff;
+}
+
+.letter-space {
+    letter-spacing: 0.18em;
+}
+</style>
 {% endblock %}

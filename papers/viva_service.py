@@ -1,0 +1,112 @@
+import re
+
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils import timezone
+
+from .ai_service import AIService
+from .models import LearningProgress, PaperContent, VivaQuestion
+from .provider_factory import ProviderFactory
+from .response_validator import validate_json_response
+
+
+class VivaGenerationError(ValueError):
+    """Raised when viva question generation fails."""
+
+
+def _normalize_answers(value):
+    if isinstance(value, str):
+        return [item.strip() for item in re.split(r'\n|\r|;|\|', value) if item.strip()]
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def _clean_viva_entries(raw_entries):
+    cleaned = []
+    seen_questions = set()
+    for index, entry in enumerate(raw_entries, start=1):
+        if not isinstance(entry, dict):
+            continue
+
+        question = str(entry.get('question') or '').strip()
+        answer = str(entry.get('answer') or entry.get('suggested_answer') or '').strip()
+        difficulty = str(entry.get('difficulty') or 'Medium').strip() or 'Medium'
+        category = str(entry.get('category') or 'Basic').strip() or 'Basic'
+        examiner_tip = str(entry.get('examiner_tip') or entry.get('follow_up_question') or '').strip()
+
+        if not question or not answer:
+            continue
+
+        if question.lower() in seen_questions:
+            continue
+
+        seen_questions.add(question.lower())
+        cleaned.append({
+            'question': question,
+            'suggested_answer': answer,
+            'follow_up_question': '',
+            'difficulty': difficulty.title(),
+            'category': category,
+            'examiner_tip': examiner_tip,
+            'display_order': index,
+        })
+
+    return cleaned
+
+
+def generate_viva_questions(paper):
+    """Generate paper-specific viva questions from stored extracted text and persist them."""
+    try:
+        content = paper.content
+    except ObjectDoesNotExist as exc:
+        raise VivaGenerationError('Paper content must exist before generating viva questions.') from exc
+
+    if not content.extracted_text or not content.extracted_text.strip():
+        raise VivaGenerationError('Paper content must contain extracted text before generating viva questions.')
+
+    existing = list(paper.viva_questions.all().order_by('display_order', 'id'))
+    if existing:
+        return existing
+
+    try:
+        provider = ProviderFactory.create_provider()
+        ai_service = AIService(provider=provider)
+        raw_response = ai_service.generate_feature('viva', content.extracted_text)
+    except Exception as exc:
+        raise VivaGenerationError('Viva question generation failed. Please try again later.') from exc
+
+    if not raw_response or not str(raw_response).strip():
+        raise VivaGenerationError('The AI provider returned an empty viva response.')
+
+    valid, payload, error_message = validate_json_response(raw_response)
+    if not valid:
+        raise VivaGenerationError(f'The AI provider returned an invalid JSON response: {error_message}')
+
+    raw_questions = payload.get('viva_questions')
+    if not isinstance(raw_questions, list):
+        raise VivaGenerationError('The AI provider response did not include a valid viva_questions list.')
+
+    cleaned_entries = _clean_viva_entries(raw_questions)
+    if not cleaned_entries or len(cleaned_entries) < 8:
+        raise VivaGenerationError('The AI provider returned an invalid or incomplete viva payload.')
+
+    VivaQuestion.objects.filter(paper=paper).delete()
+    created_questions = []
+    for entry in cleaned_entries[:15]:
+        created_questions.append(VivaQuestion.objects.create(
+            paper=paper,
+            question=entry['question'],
+            suggested_answer=entry['suggested_answer'],
+            follow_up_question=entry['follow_up_question'],
+            difficulty=entry['difficulty'],
+            category=entry['category'],
+            examiner_tip=entry['examiner_tip'],
+            display_order=entry['display_order'],
+        ))
+
+    progress, _ = LearningProgress.objects.get_or_create(paper=paper)
+    progress.viva_completed = True
+    progress.last_accessed = timezone.now()
+    progress.save(update_fields=['viva_completed', 'last_accessed'])
+
+    return created_questions

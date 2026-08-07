@@ -1,18 +1,105 @@
 {% extends 'papers/workspace/base_workspace.html' %}
 
 {% block workspace_content %}
-<div class="card border-0 shadow-sm">
-    <div class="card-body">
-        <h4 class="h5">Section Learning</h4>
-        {% if analysis_contributions %}
-            <ul class="mb-0">
-                {% for contribution in analysis_contributions %}
-                    <li>{{ contribution }}</li>
+<div class="card border-0 shadow-sm section-learning-shell">
+    <div class="card-body p-4 p-lg-5">
+        <div class="mb-4">
+            <p class="text-uppercase text-muted fw-semibold mb-2 letter-space">Section Learning</p>
+            <h4 class="display-6 fw-bold mb-3">Section Learning</h4>
+            <p class="lead text-muted mb-0">Read each paper section as a guided learning checkpoint, with meaning, purpose, key points, and what to understand before moving on.</p>
+        </div>
+
+        {% if section_learning_sections %}
+            <div class="accordion" id="sectionLearningAccordion">
+                {% for section in section_learning_sections %}
+                    <div class="accordion-item border-0 shadow-sm mb-3 rounded-4">
+                        <h2 class="accordion-header" id="heading-{{ forloop.counter }}">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse-{{ forloop.counter }}">
+                                <span class="fw-semibold">{{ section.title }}</span>
+                            </button>
+                        </h2>
+                        <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ forloop.counter }}" data-bs-parent="#sectionLearningAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-3">
+                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Summary</h6>
+                                    <p class="mb-0">{{ section.summary }}</p>
+                                </div>
+                                <div class="mb-3">
+                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Purpose</h6>
+                                    <p class="mb-0">{{ section.purpose }}</p>
+                                </div>
+                                <div class="mb-3">
+                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Key Points</h6>
+                                    <ul class="mb-0">
+                                        {% for point in section.key_points %}
+                                            <li>{{ point }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                <div class="mb-3">
+                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Important Terms</h6>
+                                    <ul class="mb-0">
+                                        {% for term in section.important_terms %}
+                                            <li>{{ term }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                {% if section.conclusion %}
+                                <div class="mb-3">
+                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Conclusion</h6>
+                                    <p class="mb-0">{{ section.conclusion }}</p>
+                                </div>
+                                {% endif %}
+                                <div>
+                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Student Note</h6>
+                                    <p class="mb-0">{{ section.student_note }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 {% endfor %}
-            </ul>
+            </div>
         {% else %}
-            <p class="text-muted mb-0">Run Start Learning to generate section-based insights.</p>
+            <div class="empty-state rounded-4 p-4 p-lg-5">
+                <form method="post" action="{% url 'paper_sections' paper.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary btn-lg">Generate Section Learning</button>
+                </form>
+            </div>
         {% endif %}
     </div>
 </div>
+
+<style>
+.section-learning-shell {
+    border-radius: 1.25rem;
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.accordion-button {
+    font-size: 1.05rem;
+    color: #17324d;
+}
+
+.accordion-button:not(.collapsed) {
+    background: #eff6ff;
+    color: #0d3b66;
+    box-shadow: none;
+}
+
+.accordion-body p,
+.accordion-body li {
+    line-height: 1.75;
+    color: #17324d;
+}
+
+.empty-state {
+    border: 1px dashed #cbd5e1;
+    background: #fbfdff;
+}
+
+.letter-space {
+    letter-spacing: 0.18em;
+}
+</style>
 {% endblock %}

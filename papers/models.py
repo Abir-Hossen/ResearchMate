@@ -50,12 +50,15 @@ class AIAnalysis(models.Model):
     overview = models.TextField(blank=True)
     beginner_explanation = models.TextField(blank=True)
     technical_explanation = models.TextField(blank=True)
+    revision_notes = models.TextField(blank=True)
     key_contributions = models.TextField(blank=True)
     key_concepts = models.JSONField(default=list, blank=True)
     reading_difficulty_level = models.CharField(max_length=50, blank=True)
     reading_difficulty_reason = models.TextField(blank=True)
     analysis_status = models.CharField(max_length=30, default='Pending')
     ai_model = models.CharField(max_length=100, blank=True)
+    raw_response = models.TextField(blank=True)
+    analysis_error = models.TextField(blank=True)
     generated_at = models.DateTimeField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
 
@@ -66,17 +69,17 @@ class AIAnalysis(models.Model):
 class Glossary(models.Model):
     paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='glossary_terms')
     term = models.CharField(max_length=255)
+    explanation = models.TextField(blank=True)
+    paper_role = models.TextField(blank=True)
     simple_explanation = models.TextField(blank=True)
     technical_explanation = models.TextField(blank=True)
     example = models.TextField(blank=True)
     display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['display_order', 'id']
         indexes = [models.Index(fields=['paper', 'display_order'])]
-
-    class Meta:
-        ordering = ['display_order', 'id']
 
     def __str__(self):
         return self.term
@@ -86,6 +89,10 @@ class Flashcard(models.Model):
     paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='flashcards')
     question = models.TextField()
     answer = models.TextField()
+    paper_context = models.TextField(blank=True)
+    importance = models.TextField(blank=True)
+    category = models.CharField(max_length=50, blank=True)
+    difficulty = models.CharField(max_length=20, blank=True)
     display_order = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -105,6 +112,7 @@ class QuizQuestion(models.Model):
     option_d = models.CharField(max_length=255)
     correct_answer = models.CharField(max_length=20)
     explanation = models.TextField(blank=True)
+    difficulty = models.CharField(max_length=20, blank=True)
     display_order = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -120,6 +128,9 @@ class VivaQuestion(models.Model):
     question = models.TextField()
     suggested_answer = models.TextField(blank=True)
     follow_up_question = models.TextField(blank=True)
+    difficulty = models.CharField(max_length=20, blank=True)
+    category = models.CharField(max_length=40, blank=True)
+    examiner_tip = models.TextField(blank=True)
     display_order = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -128,6 +139,29 @@ class VivaQuestion(models.Model):
 
     def __str__(self):
         return self.question[:80]
+
+
+class PaperSection(models.Model):
+    paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='section_learning_sections')
+    title = models.CharField(max_length=255)
+    section_order = models.PositiveIntegerField(default=0)
+    original_text = models.TextField(blank=True)
+    summary = models.TextField(blank=True)
+    purpose = models.TextField(blank=True)
+    conclusion = models.TextField(blank=True)
+    key_points = models.JSONField(default=list, blank=True)
+    important_terms = models.JSONField(default=list, blank=True)
+    student_note = models.TextField(blank=True)
+    is_generated = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['section_order', 'id']
+        indexes = [models.Index(fields=['paper', 'section_order'])]
+
+    def __str__(self):
+        return f'{self.title} ({self.paper.title})'
 
 
 class LearningProgress(models.Model):

@@ -3,22 +3,33 @@
 {% block workspace_content %}
 <div class="card border-0 shadow-sm">
     <div class="card-body">
-        <h4 class="h5">Glossary</h4>
+        <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+            <div>
+                <h4 class="h5 mb-1">Glossary</h4>
+                <p class="text-muted mb-0">Concise, paper-specific terminology that helps you understand this work.</p>
+            </div>
+            <form method="post" class="ms-auto">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-sm">Generate Glossary</button>
+            </form>
+        </div>
+
         {% if glossary_terms %}
             <div class="row g-3">
                 {% for term in glossary_terms %}
-                <div class="col-md-6">
-                    <div class="border rounded p-3 h-100">
-                        <h5 class="h6 mb-2">{{ term.term }}</h5>
-                        <p class="mb-1"><strong>Simple:</strong> {{ term.simple_explanation }}</p>
-                        <p class="mb-1"><strong>Technical:</strong> {{ term.technical_explanation }}</p>
-                        <p class="mb-0"><strong>Example:</strong> {{ term.example }}</p>
+                <div class="col-lg-6">
+                    <div class="border rounded p-3 h-100 shadow-sm bg-white">
+                        <h5 class="h6 mb-2 fw-semibold">{{ term.term }}</h5>
+                        <p class="mb-2"><strong>Explanation</strong><br>{{ term.explanation|default:term.technical_explanation|default:term.simple_explanation|linebreaksbr }}</p>
+                        <p class="mb-0"><strong>Role in This Paper</strong><br>{{ term.paper_role|default:term.simple_explanation|linebreaksbr }}</p>
                     </div>
                 </div>
                 {% endfor %}
             </div>
         {% else %}
-            <p class="text-muted mb-0">Run Start Learning to generate glossary entries.</p>
+            <div class="border rounded p-4 text-center bg-light">
+                <p class="text-muted mb-3">No glossary entries yet. Generate a paper-specific glossary to review the terminology used in this paper.</p>
+            </div>
         {% endif %}
     </div>
 </div>

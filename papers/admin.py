@@ -80,6 +80,7 @@ class AIAnalysisAdmin(admin.ModelAdmin):
     search_fields = ('paper__title', 'paper__owner__username')
     list_filter = ('analysis_status', 'ai_model', 'last_updated')
     ordering = ('-last_updated',)
+    readonly_fields = ('generated_at', 'last_updated')
     fieldsets = (
         ('General Information', {
             'fields': ('paper', 'overview')
@@ -104,7 +105,7 @@ class GlossaryAdmin(admin.ModelAdmin):
             'fields': ('paper', 'term', 'display_order')
         }),
         ('Content', {
-            'fields': ('simple_explanation', 'technical_explanation', 'example')
+            'fields': ('explanation', 'paper_role', 'simple_explanation', 'technical_explanation', 'example')
         }),
     )
 

@@ -3,23 +3,102 @@
 {% block workspace_content %}
 <div class="card border-0 shadow-sm">
     <div class="card-body">
-        <h4 class="h5">Quiz</h4>
-        {% if quiz_questions %}
-            {% for question in quiz_questions %}
-            <div class="border rounded p-3 mb-3">
-                <p class="fw-semibold mb-3">{{ question.question }}</p>
-                <ul class="mb-2">
-                    <li>{{ question.option_a }}</li>
-                    <li>{{ question.option_b }}</li>
-                    <li>{{ question.option_c }}</li>
-                    <li>{{ question.option_d }}</li>
-                </ul>
-                <p class="mb-1"><strong>Correct Answer:</strong> {{ question.correct_answer }}</p>
-                <p class="text-muted mb-0">{{ question.explanation }}</p>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="h5 mb-1">Quiz</h4>
+                <p class="text-muted mb-0">Answer one question at a time and review your results at the end.</p>
             </div>
+            {% if quiz_questions %}
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="generate">
+                    <button class="btn btn-outline-primary btn-sm" type="submit">Generate Quiz</button>
+                </form>
+            {% endif %}
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
             {% endfor %}
+        {% endif %}
+
+        {% if not quiz_questions %}
+            <div class="text-center py-4">
+                <p class="text-muted mb-3">No quiz questions have been generated yet.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="generate">
+                    <button class="btn btn-primary" type="submit">Generate Quiz</button>
+                </form>
+            </div>
+        {% elif show_results %}
+            <div class="mb-3">
+                <h5 class="mb-1">Score: {{ correct_answers }}/{{ total_questions }}</h5>
+                <p class="text-muted mb-0">{{ percentage }}% - {% if passed %}Pass{% else %}Needs Improvement{% endif %}</p>
+            </div>
+            {% for row in review_rows %}
+                <div class="border rounded p-3 mb-3">
+                    <p class="fw-semibold mb-2">{{ forloop.counter }}. {{ row.question.question }}</p>
+                    <p class="mb-1"><strong>Your answer:</strong> {{ row.student_answer|default:'No answer selected' }}</p>
+                    <p class="mb-1"><strong>Correct answer:</strong> {{ row.correct_answer }}</p>
+                    <p class="mb-1"><strong>Explanation:</strong> {{ row.question.explanation }}</p>
+                    {% if row.is_correct %}
+                        <span class="badge bg-success">Correct</span>
+                    {% else %}
+                        <span class="badge bg-danger">Incorrect</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="generate">
+                <button class="btn btn-outline-primary" type="submit">Try Again</button>
+            </form>
         {% else %}
-            <p class="text-muted mb-0">Run Start Learning to generate quiz questions.</p>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">Question {{ question_index|add:1 }} of {{ question_count }}</span>
+                    <span class="badge bg-light text-dark">{{ current_question.difficulty|default:'Medium' }}</span>
+                </div>
+                <div class="progress mt-2" style="height: 6px;">
+                    <div class="progress-bar" role="progressbar" style="width: {% widthratio question_index question_count 100 %}%;"></div>
+                </div>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="submit">
+                <input type="hidden" name="question_index" value="{{ question_index }}">
+                <div class="border rounded p-3 mb-3">
+                    <p class="fw-semibold mb-3">{{ current_question.question }}</p>
+                    <div class="list-group">
+                        <label class="list-group-item">
+                            <input class="form-check-input me-2" type="radio" name="selected_answer" value="{{ current_question.option_a }}" {% if selected_answer == current_question.option_a %}checked{% endif %}>
+                            {{ current_question.option_a }}
+                        </label>
+                        <label class="list-group-item">
+                            <input class="form-check-input me-2" type="radio" name="selected_answer" value="{{ current_question.option_b }}" {% if selected_answer == current_question.option_b %}checked{% endif %}>
+                            {{ current_question.option_b }}
+                        </label>
+                        <label class="list-group-item">
+                            <input class="form-check-input me-2" type="radio" name="selected_answer" value="{{ current_question.option_c }}" {% if selected_answer == current_question.option_c %}checked{% endif %}>
+                            {{ current_question.option_c }}
+                        </label>
+                        <label class="list-group-item">
+                            <input class="form-check-input me-2" type="radio" name="selected_answer" value="{{ current_question.option_d }}" {% if selected_answer == current_question.option_d %}checked{% endif %}>
+                            {{ current_question.option_d }}
+                        </label>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button class="btn btn-outline-secondary" type="submit" name="action" value="prev" {% if question_index == 0 %}disabled{% endif %}>Previous</button>
+                    {% if question_index == question_count|add:-1 %}
+                        <button class="btn btn-primary" type="submit">Submit Quiz</button>
+                    {% else %}
+                        <button class="btn btn-primary" type="submit" name="action" value="next">Next</button>
+                    {% endif %}
+                </div>
+            </form>
         {% endif %}
     </div>
 </div>
