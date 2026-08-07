@@ -6,6 +6,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.shortcuts import redirect, render
 
+from papers.dashboard_service import get_dashboard_data
+
 from .forms import LoginForm, PasswordChangeForm, RegistrationForm
 
 
@@ -63,10 +65,11 @@ def logout_view(request):
 
 @login_required(login_url='login')
 def dashboard_view(request):
-    context = {
+    context = get_dashboard_data(request.user)
+    context.update({
         'user': request.user,
         'today': datetime.date.today(),
-    }
+    })
     return render(request, 'accounts/dashboard.html', context)
 
 

@@ -5,10 +5,12 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404, redirect, render
 
+from django.utils import timezone
+
 from .forms import PaperUploadForm
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .glossary_service import GlossaryGenerationError, generate_glossary
-from .models import Paper
+from .models import Paper, QuizAttempt
 from .quiz_service import QuizGenerationError, generate_quiz
 from .revision_notes_service import RevisionNotesGenerationError, generate_revision_notes
 from .viva_service import VivaGenerationError, generate_viva_questions
@@ -224,13 +226,22 @@ def paper_quiz(request, paper_id):
             correct_answers = sum(1 for row in review_rows if row['is_correct'])
             total_questions = len(review_rows)
             percentage = round((correct_answers / total_questions) * 100, 1) if total_questions else 0
+            passed = percentage >= 70
+            QuizAttempt.objects.create(
+                paper=paper,
+                percentage=percentage,
+                correct_answers=correct_answers,
+                total_questions=total_questions,
+                passed=passed,
+                completed_at=timezone.now(),
+            )
             context.update({
                 'show_results': True,
                 'review_rows': review_rows,
                 'correct_answers': correct_answers,
                 'total_questions': total_questions,
                 'percentage': percentage,
-                'passed': percentage >= 70,
+                'passed': passed,
                 'current_question': None,
             })
             return render(request, 'papers/workspace/quiz.html', context)
