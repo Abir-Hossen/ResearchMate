@@ -82,6 +82,7 @@ class MockPayloadParser:
                 option_d=item['option_d'],
                 correct_answer=item['correct_answer'],
                 explanation=item.get('explanation', ''),
+                difficulty=item.get('difficulty', ''),
                 display_order=index,
             )
 
@@ -193,6 +194,7 @@ class GroqPayloadParser:
                 option_d=item.get('option_d', ''),
                 correct_answer=item.get('correct_answer', ''),
                 explanation=item.get('explanation', ''),
+                difficulty=item.get('difficulty', ''),
                 display_order=index,
             )
 

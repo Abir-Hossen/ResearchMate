@@ -9,6 +9,7 @@ from .forms import PaperUploadForm
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .glossary_service import GlossaryGenerationError, generate_glossary
 from .models import Paper
+from .quiz_service import QuizGenerationError, generate_quiz
 from .services import (
     _get_user_facing_error_message,
     build_workspace_context,
@@ -182,7 +183,73 @@ def paper_flashcards(request, paper_id):
 
 @login_required(login_url='login')
 def paper_quiz(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+    quiz_questions = list(paper.quiz_questions.all().order_by('display_order', 'id'))
     context = build_workspace_context(request.user, paper_id, 'quiz')
+    context['quiz_questions'] = quiz_questions
+
+    if request.method == 'POST':
+        action = request.POST.get('action', 'generate')
+        if action == 'generate':
+            try:
+                generate_quiz(paper)
+                messages.success(request, 'Quiz generated successfully.')
+            except QuizGenerationError as exc:
+                logger.warning('Paper ID %s: quiz generation failed: %s', paper.id, exc)
+                messages.error(request, str(exc))
+
+            request.session.pop(f'quiz_answers_{paper.id}', None)
+            return redirect('paper_quiz', paper_id=paper.id)
+
+        current_index = int(request.POST.get('question_index', 0))
+        selected_answer = request.POST.get('selected_answer', '')
+        if selected_answer:
+            answers = dict(request.session.get(f'quiz_answers_{paper.id}', {}))
+            answers[str(current_index)] = selected_answer
+            request.session[f'quiz_answers_{paper.id}'] = answers
+
+        if action == 'submit':
+            review_rows = []
+            for index, question in enumerate(quiz_questions):
+                answer = request.session.get(f'quiz_answers_{paper.id}', {}).get(str(index), '')
+                review_rows.append({
+                    'question': question,
+                    'student_answer': answer,
+                    'correct_answer': question.correct_answer,
+                    'is_correct': answer == question.correct_answer,
+                })
+
+            correct_answers = sum(1 for row in review_rows if row['is_correct'])
+            total_questions = len(review_rows)
+            percentage = round((correct_answers / total_questions) * 100, 1) if total_questions else 0
+            context.update({
+                'show_results': True,
+                'review_rows': review_rows,
+                'correct_answers': correct_answers,
+                'total_questions': total_questions,
+                'percentage': percentage,
+                'passed': percentage >= 70,
+                'current_question': None,
+            })
+            return render(request, 'papers/workspace/quiz.html', context)
+
+        if action == 'next':
+            current_index += 1
+        elif action == 'prev':
+            current_index -= 1
+
+        current_index = max(0, min(current_index, len(quiz_questions) - 1)) if quiz_questions else 0
+        context['current_question'] = quiz_questions[current_index] if quiz_questions else None
+        context['question_index'] = current_index
+        context['question_count'] = len(quiz_questions)
+        context['selected_answer'] = request.session.get(f'quiz_answers_{paper.id}', {}).get(str(current_index), '')
+        return render(request, 'papers/workspace/quiz.html', context)
+
+    if quiz_questions:
+        context['current_question'] = quiz_questions[0]
+        context['question_index'] = 0
+        context['question_count'] = len(quiz_questions)
+        context['selected_answer'] = request.session.get(f'quiz_answers_{paper.id}', {}).get('0', '')
     return render(request, 'papers/workspace/quiz.html', context)
 
 

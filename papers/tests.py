@@ -19,6 +19,7 @@ from .prompts.technical import build_technical_prompt
 from .response_validator import validate_json_response
 from .services import _get_user_facing_error_message
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
+from .quiz_service import QuizGenerationError, generate_quiz
 
 
 class GroqConnectivityTests(TestCase):
@@ -545,6 +546,65 @@ class PaperUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Flashcards generated successfully.')
         self.assertTrue(Flashcard.objects.filter(paper=paper).exists())
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"' + ('Easy' if index <= 4 else 'Medium' if index <= 8 else 'Hard') + '","explanation":"Explanation ' + str(index) + '"}'
+        for index in range(1, 11)
+    ]) + ']}')
+    def test_generate_quiz_persists_questions_and_reuses_database_value(self, mock_generate_feature):
+        user = User.objects.create_user(username='quizgen', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Generate Paper', pdf_file=SimpleUploadedFile('quiz-generate.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a novel method and reports results from a detailed experiment.', extraction_status='Ready')
+
+        questions = generate_quiz(paper)
+
+        self.assertEqual(len(questions), 10)
+        self.assertEqual(QuizQuestion.objects.filter(paper=paper).count(), 10)
+        self.assertEqual(mock_generate_feature.call_count, 1)
+        self.assertEqual(questions[0].difficulty, 'Easy')
+
+        questions_again = generate_quiz(paper)
+        self.assertEqual(len(questions_again), 10)
+        self.assertEqual(mock_generate_feature.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    def test_quiz_page_resets_previous_answers_when_starting_over(self):
+        user = User.objects.create_user(username='quizreset', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Reset Paper', pdf_file=SimpleUploadedFile('quiz-reset.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='The paper covers a research problem and a proposed solution.', extraction_status='Ready')
+        QuizQuestion.objects.create(paper=paper, question='First question', option_a='A', option_b='B', option_c='C', option_d='D', correct_answer='A', explanation='Explanation', display_order=1)
+        QuizQuestion.objects.create(paper=paper, question='Second question', option_a='A', option_b='B', option_c='C', option_d='D', correct_answer='B', explanation='Explanation', display_order=2)
+
+        self.client.force_login(user)
+        session = self.client.session
+        session[f'quiz_answers_{paper.id}'] = {'0': 'A'}
+        session.save()
+
+        response = self.client.post(reverse('paper_quiz', args=[paper.pk]), {'action': 'generate'}, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'checked')
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"' + ('Easy' if index <= 4 else 'Medium' if index <= 8 else 'Hard') + '","explanation":"Explanation ' + str(index) + '"}'
+        for index in range(1, 11)
+    ]) + ']}')
+    def test_quiz_page_shows_generate_button_and_can_generate_quiz(self, mock_generate_feature):
+        user = User.objects.create_user(username='quizview', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz View Paper', pdf_file=SimpleUploadedFile('quiz-view.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='The paper discusses a research problem and an approach designed to solve it.', extraction_status='Ready')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_quiz', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Generate Quiz')
+
+        response = self.client.post(reverse('paper_quiz', args=[paper.pk]), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Quiz generated successfully.')
+        self.assertTrue(QuizQuestion.objects.filter(paper=paper).exists())
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.flashcard_service.AIService.generate_feature', return_value='{"flashcards":[{"question":"What is the research goal?","answer":"The paper focuses on a specific task described in the introduction.","paper_context":"The introduction defines the main objective and explains why the task is important.","importance":["Frames the study","Connects methods to results"],"category":"Research Problem","difficulty":"Easy"}]}')

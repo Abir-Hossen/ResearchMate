@@ -111,6 +111,7 @@ class QuizQuestion(models.Model):
     option_d = models.CharField(max_length=255)
     correct_answer = models.CharField(max_length=20)
     explanation = models.TextField(blank=True)
+    difficulty = models.CharField(max_length=20, blank=True)
     display_order = models.PositiveIntegerField(default=0)
 
     class Meta:
