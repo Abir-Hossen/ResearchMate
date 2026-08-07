@@ -4,6 +4,7 @@ from .prompts import (
     build_flashcards_prompt,
     build_glossary_prompt,
     build_quiz_prompt,
+    build_revision_notes_prompt,
     build_section_learning_prompt,
     build_technical_prompt,
     build_viva_prompt,
@@ -46,6 +47,10 @@ def get_viva_prompt(extracted_text):
 
 def get_quiz_prompt(extracted_text):
     return build_quiz_prompt(extracted_text)
+
+
+def get_revision_notes_prompt(extracted_text):
+    return build_revision_notes_prompt(extracted_text)
 
 
 def get_difficulty_prompt(extracted_text):

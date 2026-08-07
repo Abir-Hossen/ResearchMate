@@ -7,6 +7,7 @@ from .prompt_manager import (
     get_flashcards_prompt,
     get_glossary_prompt,
     get_quiz_prompt,
+    get_revision_notes_prompt,
     get_section_learning_prompt,
     get_section_detection_prompt,
     get_single_section_explanation_prompt,
@@ -31,6 +32,7 @@ class AIService:
             'viva': get_viva_prompt,
             'quiz': get_quiz_prompt,
             'difficulty': get_difficulty_prompt,
+            'revision_notes': get_revision_notes_prompt,
         }.get(feature_name)
 
         if prompt_builder is None:

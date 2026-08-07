@@ -10,6 +10,7 @@ from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .glossary_service import GlossaryGenerationError, generate_glossary
 from .models import Paper
 from .quiz_service import QuizGenerationError, generate_quiz
+from .revision_notes_service import RevisionNotesGenerationError, generate_revision_notes
 from .viva_service import VivaGenerationError, generate_viva_questions
 from .services import (
     _get_user_facing_error_message,
@@ -281,7 +282,20 @@ def paper_viva(request, paper_id):
 
 @login_required(login_url='login')
 def paper_notes(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+
+    if request.method == 'POST':
+        try:
+            generate_revision_notes(paper)
+            messages.success(request, 'Revision notes generated successfully.')
+        except RevisionNotesGenerationError as exc:
+            logger.warning('Paper ID %s: revision notes generation failed: %s', paper.id, exc)
+            messages.error(request, str(exc))
+        return redirect('paper_notes', paper_id=paper.id)
+
     context = build_workspace_context(request.user, paper_id, 'notes')
+    analysis = paper.ai_analysis if hasattr(paper, 'ai_analysis') else None
+    context['revision_notes'] = analysis.revision_notes if analysis else ''
     return render(request, 'papers/workspace/notes.html', context)
 
 

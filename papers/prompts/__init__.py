@@ -13,6 +13,7 @@ from .section_learning import (
 from .technical import build_technical_prompt
 from .technical_prompt import build_technical_prompt as build_technical_prompt_text
 from .viva import build_viva_prompt
+from .revision_notes import build_revision_notes_prompt
 
 __all__ = [
     'build_feature_prompt',
@@ -26,4 +27,5 @@ __all__ = [
     'build_viva_prompt',
     'build_quiz_prompt',
     'build_difficulty_prompt',
+    'build_revision_notes_prompt',
 ]

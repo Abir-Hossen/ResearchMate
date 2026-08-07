@@ -14,6 +14,7 @@ from reportlab.pdfgen import canvas
 from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, PaperSection, QuizQuestion, VivaQuestion
 from .prompts.beginner import build_beginner_prompt
 from .prompts.glossary import build_glossary_prompt
+from .prompts.revision_notes import build_revision_notes_prompt
 from .prompts.section_learning import build_section_learning_prompt
 from .prompts.technical import build_technical_prompt
 from .response_validator import validate_json_response
@@ -196,6 +197,34 @@ class PaperUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '<h2 class="section-title">Research Objective</h2>')
         self.assertContains(response, '<li>It is practical.</li>')
+
+    def test_revision_notes_prompt_requests_markdown_output(self):
+        prompt = build_revision_notes_prompt('A sample paper about neural networks.')
+
+        self.assertIn('Markdown', prompt)
+        self.assertIn('revision notes', prompt)
+        self.assertIn('Paper text:', prompt)
+
+    @override_settings(AI_PROVIDER='mock')
+    def test_revision_notes_page_generates_and_persists_notes(self):
+        user = User.objects.create_user(username='revisionnotesuser', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Revision Notes Paper', pdf_file=SimpleUploadedFile('revision-notes.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper introduces a useful evaluation method.', extraction_status='Ready')
+
+        class StubProvider:
+            model_name = 'mock-model'
+
+            def generate(self, prompt):
+                return '## Main Takeaway\n\n- Review the evaluation method.'
+
+        self.client.force_login(user)
+        with patch('papers.revision_notes_service.ProviderFactory.create_provider', return_value=StubProvider()):
+            response = self.client.post(reverse('paper_notes', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertEqual(analysis.revision_notes, '## Main Takeaway\n\n- Review the evaluation method.')
+        self.assertContains(response, '<h2 class="section-title">Main Takeaway</h2>')
 
     @override_settings(AI_PROVIDER='mock')
     def test_technical_page_shows_generate_button_when_content_is_missing(self):

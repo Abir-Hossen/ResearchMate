@@ -50,6 +50,7 @@ class AIAnalysis(models.Model):
     overview = models.TextField(blank=True)
     beginner_explanation = models.TextField(blank=True)
     technical_explanation = models.TextField(blank=True)
+    revision_notes = models.TextField(blank=True)
     key_contributions = models.TextField(blank=True)
     key_concepts = models.JSONField(default=list, blank=True)
     reading_difficulty_level = models.CharField(max_length=50, blank=True)
