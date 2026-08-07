@@ -18,6 +18,7 @@ from .prompts.section_learning import build_section_learning_prompt
 from .prompts.technical import build_technical_prompt
 from .response_validator import validate_json_response
 from .services import _get_user_facing_error_message
+from .flashcard_service import FlashcardGenerationError, generate_flashcards
 
 
 class GroqConnectivityTests(TestCase):
@@ -511,6 +512,48 @@ class PaperUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'CNN')
         self.assertContains(response, 'Role in This Paper')
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.flashcard_service.AIService.generate_feature', return_value='{"flashcards":[{"question":"What is the research goal?","answer":"The paper focuses on a specific task described in the introduction.","paper_context":"The introduction defines the main objective and explains why the task is important.","importance":["Frames the study","Connects methods to results"],"category":"Research Problem","difficulty":"Easy"}]}')
+    def test_generate_flashcards_persists_and_reuses_database_value(self, mock_generate_feature):
+        user = User.objects.create_user(username='flashcardgen', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Flashcard Generate Paper', pdf_file=SimpleUploadedFile('flashcards.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        cards = generate_flashcards(paper)
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(Flashcard.objects.filter(paper=paper).count(), 1)
+        self.assertEqual(cards[0].category, 'Research Problem')
+        self.assertEqual(mock_generate_feature.call_count, 1)
+
+        cards_again = generate_flashcards(paper)
+        self.assertEqual(len(cards_again), 1)
+        self.assertEqual(mock_generate_feature.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    def test_flashcards_page_shows_generate_button_and_can_generate_cards(self):
+        user = User.objects.create_user(username='flashcardview', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Flashcard View Paper', pdf_file=SimpleUploadedFile('flashcards-view.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a task and describes methods and results.', extraction_status='Ready')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_flashcards', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Generate Flashcards')
+
+        response = self.client.post(reverse('paper_flashcards', args=[paper.pk]), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Flashcards generated successfully.')
+        self.assertTrue(Flashcard.objects.filter(paper=paper).exists())
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.flashcard_service.AIService.generate_feature', return_value='{"flashcards":[{"question":"What is the research goal?","answer":"The paper focuses on a specific task described in the introduction.","paper_context":"The introduction defines the main objective and explains why the task is important.","importance":["Frames the study","Connects methods to results"],"category":"Research Problem","difficulty":"Easy"}]}')
+    def test_generate_flashcards_fails_when_missing_extracted_text(self, mock_generate_feature):
+        user = User.objects.create_user(username='flashcardfail', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Flashcard Fail Paper', pdf_file=SimpleUploadedFile('flashcards-fail.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+
+        with self.assertRaises(FlashcardGenerationError):
+            generate_flashcards(paper)
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.ai_providers.MockProvider.generate', return_value='{"technical_explanation":"# Technical Explanation\\n\\n## Overall Technical Architecture\\n\\n' + ('This is a complete technical lecture note. ' * 80) + '\\n\\n## Model Architecture\\n\\nThis section teaches the background concepts needed to understand the paper. ","beginner_explanation":"A simple explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"A bit technical"},"glossary":[],"flashcards":[],"viva_questions":[]}')

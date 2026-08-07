@@ -1,23 +1,247 @@
 {% extends 'papers/workspace/base_workspace.html' %}
 
 {% block workspace_content %}
-<div class="card border-0 shadow-sm">
-    <div class="card-body">
-        <h4 class="h5">Flashcards</h4>
-        {% if flashcards %}
-            <div class="row g-3">
-                {% for card in flashcards %}
-                <div class="col-md-6">
-                    <div class="border rounded p-3 h-100">
-                        <p class="fw-semibold mb-2">{{ card.question }}</p>
-                        <p class="text-muted mb-0">{{ card.answer }}</p>
+<div class="flashcards-page">
+    <div class="flashcards-header card border-0 shadow-sm mb-4">
+        <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3">
+            <div>
+                <p class="text-uppercase text-primary fw-semibold mb-2 letter-space">Flashcards</p>
+                <h2 class="display-6 fw-bold mb-2">Study the paper with active recall.</h2>
+                <p class="text-muted mb-0">Flip cards to reveal answers, review context, and focus on why each concept matters for this research.</p>
+            </div>
+            {% if not flashcards %}
+            <form method="post" class="ms-auto">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-lg">Generate Flashcards</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if flashcards %}
+    <div class="flashcard-shell mx-auto">
+        <div class="flashcard-card rounded-5 shadow-lg" id="flashcard-card" data-index="0">
+            <div class="flashcard-meta d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 p-4 border-bottom">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge rounded-pill badge-category" id="flashcard-category"></span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge rounded-pill badge-difficulty" id="flashcard-difficulty"></span>
+                    <span class="text-muted" id="card-counter"></span>
+                </div>
+            </div>
+
+            <div class="card-body p-5 text-center">
+                <div id="flashcard-content" class="flashcard-text fs-4 fw-semibold text-dark"></div>
+                <div class="flashcard-note text-muted mt-4">Use the buttons below to navigate cards and flip for the answer.</div>
+
+                <div class="flashcard-back d-none text-start mt-5" id="back-content">
+                    <div class="mb-4">
+                        <h5 class="fw-semibold mb-2">Answer</h5>
+                        <p id="flashcard-answer" class="mb-0"></p>
+                    </div>
+                    <div class="mb-4">
+                        <h5 class="fw-semibold mb-2">Paper Context</h5>
+                        <p id="flashcard-context" class="mb-0"></p>
+                    </div>
+                    <div>
+                        <h5 class="fw-semibold mb-2">Why It Matters</h5>
+                        <ul id="flashcard-importance" class="importance-list mb-0"></ul>
                     </div>
                 </div>
-                {% endfor %}
             </div>
-        {% else %}
-            <p class="text-muted mb-0">Run Start Learning to generate flashcards.</p>
-        {% endif %}
+
+            <div class="flashcard-controls p-4 border-top d-flex flex-column flex-sm-row justify-content-between gap-3">
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-primary btn-lg" id="prev-card">Previous</button>
+                    <button type="button" class="btn btn-outline-primary btn-lg" id="next-card">Next</button>
+                </div>
+                <button type="button" class="btn btn-primary btn-lg" id="flip-card">Flip Card</button>
+            </div>
+        </div>
     </div>
+    {% else %}
+    <div class="card border-0 shadow-sm text-center p-5 bg-soft">
+        <div class="card-body">
+            <h3 class="h5 mb-3">No flashcards yet</h3>
+            <p class="text-muted mb-4">Generate paper-specific flashcards to begin studying the most important ideas in this research.</p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-lg">Generate Flashcards</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+{% if flashcards %}
+<script>
+    const flashcards = [
+        {% for card in flashcards %}
+        {
+            question: "{{ card.question|escapejs }}",
+            answer: "{{ card.answer|escapejs }}",
+            paper_context: "{{ card.paper_context|escapejs }}",
+            importance: "{{ card.importance|escapejs }}".split('\\n').filter(Boolean),
+            category: "{{ card.category|escapejs }}",
+            difficulty: "{{ card.difficulty|escapejs }}",
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    const cardCount = flashcards.length;
+    let currentIndex = 0;
+    let isFront = true;
+
+    const cardContent = document.getElementById('flashcard-content');
+    const backContent = document.getElementById('back-content');
+    const cardCounter = document.getElementById('card-counter');
+    const categoryLabel = document.getElementById('flashcard-category');
+    const difficultyLabel = document.getElementById('flashcard-difficulty');
+    const answerLabel = document.getElementById('flashcard-answer');
+    const contextLabel = document.getElementById('flashcard-context');
+    const importanceList = document.getElementById('flashcard-importance');
+    const flipButton = document.getElementById('flip-card');
+
+    function difficultyClass(level) {
+        switch ((level || '').toLowerCase()) {
+            case 'hard':
+                return 'bg-danger text-white';
+            case 'medium':
+                return 'bg-warning text-dark';
+            default:
+                return 'bg-success text-white';
+        }
+    }
+
+    function renderCard() {
+        const card = flashcards[currentIndex];
+        categoryLabel.textContent = card.category || 'Unknown';
+        difficultyLabel.textContent = card.difficulty || 'Unknown';
+        difficultyLabel.className = 'badge rounded-pill ' + difficultyClass(card.difficulty);
+        cardCounter.textContent = `Card ${currentIndex + 1} of ${cardCount}`;
+
+        if (isFront) {
+            cardContent.textContent = card.question;
+            backContent.classList.add('d-none');
+        } else {
+            cardContent.textContent = card.question;
+            answerLabel.textContent = card.answer;
+            contextLabel.textContent = card.paper_context || 'No additional context available.';
+            importanceList.innerHTML = '';
+            (card.importance || []).forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item;
+                importanceList.appendChild(li);
+            });
+            backContent.classList.remove('d-none');
+        }
+    }
+
+    document.getElementById('prev-card').addEventListener('click', () => {
+        if (currentIndex > 0) {
+            currentIndex -= 1;
+            isFront = true;
+            renderCard();
+        }
+    });
+
+    document.getElementById('next-card').addEventListener('click', () => {
+        if (currentIndex < cardCount - 1) {
+            currentIndex += 1;
+            isFront = true;
+            renderCard();
+        }
+    });
+
+    flipButton.addEventListener('click', () => {
+        isFront = !isFront;
+        renderCard();
+    });
+
+    renderCard();
+</script>
+{% endif %}
+
+<style>
+.flashcard-shell {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.flashcard-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(13, 110, 253, 0.15);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.flashcard-meta {
+    background: #eff6ff;
+}
+
+.badge-category {
+    background: #e0f2ff;
+    color: #0f172a;
+    font-size: 0.94rem;
+    padding: 0.9rem 1rem;
+}
+
+.badge-difficulty {
+    font-size: 0.94rem;
+    padding: 0.9rem 1rem;
+}
+
+.flashcard-text {
+    min-height: 5rem;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.flashcard-note {
+    font-size: 0.95rem;
+}
+
+.flashcard-back {
+    background: #f8fafc;
+    border-radius: 1rem;
+    padding: 1.5rem;
+}
+
+.importance-list {
+    list-style: none;
+    padding-left: 0;
+}
+
+.importance-list li {
+    position: relative;
+    padding-left: 1.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.importance-list li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: #0d6efd;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+.bg-soft {
+    background: #f3f7ff;
+}
+
+.letter-space {
+    letter-spacing: 0.18em;
+}
+
+.btn-outline-primary {
+    min-width: 140px;
+}
+
+.btn-primary {
+    min-width: 140px;
+}
+</style>
 {% endblock %}

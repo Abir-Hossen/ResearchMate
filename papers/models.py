@@ -88,6 +88,10 @@ class Flashcard(models.Model):
     paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='flashcards')
     question = models.TextField()
     answer = models.TextField()
+    paper_context = models.TextField(blank=True)
+    importance = models.TextField(blank=True)
+    category = models.CharField(max_length=50, blank=True)
+    difficulty = models.CharField(max_length=20, blank=True)
     display_order = models.PositiveIntegerField(default=0)
 
     class Meta:

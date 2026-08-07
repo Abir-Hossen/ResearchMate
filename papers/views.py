@@ -6,6 +6,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import PaperUploadForm
+from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .glossary_service import GlossaryGenerationError, generate_glossary
 from .models import Paper
 from .services import (
@@ -164,6 +165,17 @@ def paper_glossary(request, paper_id):
 
 @login_required(login_url='login')
 def paper_flashcards(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+
+    if request.method == 'POST':
+        try:
+            generate_flashcards(paper)
+            messages.success(request, 'Flashcards generated successfully.')
+        except FlashcardGenerationError as exc:
+            logger.warning('Paper ID %s: flashcard generation failed: %s', paper.id, exc)
+            messages.error(request, str(exc))
+        return redirect('paper_flashcards', paper_id=paper.id)
+
     context = build_workspace_context(request.user, paper_id, 'flashcards')
     return render(request, 'papers/workspace/flashcards.html', context)
 

@@ -57,7 +57,7 @@ class MockProvider(BaseProvider):
             '"key_concepts":["Core concept"],'
             '"reading_difficulty":{"level":"Intermediate","reason":"It requires domain background."},'
             '"glossary":[{"term":"Model","simple_explanation":"A simplified representation","technical_explanation":"A formal abstraction used for analysis","example":"A model can help explain observations"}],'
-            '"flashcards":[{"question":"What is the main idea?","answer":"The paper introduces a new approach."}],'
+            '"flashcards":[{"question":"What is the main idea of the paper?","answer":"The paper introduces a new approach to the problem described in the text.","paper_context":"The introduction explains the research objective and why the paper matters.","importance":["Highlights the main contribution","Connects the problem statement to the solution"],"category":"Research Problem","difficulty":"Easy"}],'
             '"viva_questions":[{"question":"What is the main contribution?","suggested_answer":"It proposes a new approach.","follow_up_question":"Why is it important?"}]}'
         )
 
