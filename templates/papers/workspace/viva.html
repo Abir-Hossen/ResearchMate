@@ -3,26 +3,56 @@
 {% block workspace_content %}
 <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
-        <div class="d-flex align-items-center gap-2 mb-3">
-            <span class="fs-3">🎓</span>
-            <h4 class="h5 mb-0">Viva Preparation</h4>
-        </div>
-        <p class="text-muted mb-3">
-            Prepare for presentations, thesis defenses, and academic discussions using AI-generated viva questions.
-        </p>
-        {% if viva_questions %}
-            {% for item in viva_questions %}
-            <div class="border rounded p-3 mb-3">
-                <p class="fw-semibold mb-2">{{ item.question }}</p>
-                <p class="mb-1"><strong>Suggested answer:</strong> {{ item.suggested_answer }}</p>
-                {% if item.follow_up_question %}
-                    <p class="text-muted mb-0"><strong>Follow-up:</strong> {{ item.follow_up_question }}</p>
-                {% endif %}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="fs-3">🎓</span>
+                    <h4 class="h5 mb-0">Viva Preparation</h4>
+                </div>
+                <p class="text-muted mb-0">
+                    Prepare for thesis-style discussions with paper-specific viva questions and examiner tips.
+                </p>
             </div>
+            {% if not viva_questions %}
+                <form method="post">
+                    {% csrf_token %}
+                    <button class="btn btn-primary" type="submit">Generate Viva Questions</button>
+                </form>
+            {% endif %}
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        {% if viva_questions %}
+            {% for category_name, items in grouped_viva_questions.items %}
+                <div class="mb-4">
+                    <h5 class="mb-3">{{ category_name }}</h5>
+                    {% for item in items %}
+                        <div class="border rounded p-3 mb-3 shadow-sm">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <p class="fw-semibold mb-0">{{ item.question }}</p>
+                                <span class="badge bg-light text-dark">{{ item.difficulty|default:'Medium' }}</span>
+                            </div>
+                            <details class="mt-2">
+                                <summary class="text-primary" style="cursor: pointer;">Show answer</summary>
+                                <div class="mt-2">
+                                    <p class="mb-2"><strong>Answer:</strong> {{ item.suggested_answer }}</p>
+                                    {% if item.examiner_tip %}
+                                        <p class="mb-0"><strong>Examiner Tip:</strong> {{ item.examiner_tip }}</p>
+                                    {% endif %}
+                                </div>
+                            </details>
+                        </div>
+                    {% endfor %}
+                </div>
             {% endfor %}
         {% else %}
             <div class="alert alert-light border" role="status">
-                Run Start Learning to generate viva preparation materials.
+                No viva questions have been generated yet.
             </div>
         {% endif %}
     </div>

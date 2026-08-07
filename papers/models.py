@@ -127,6 +127,9 @@ class VivaQuestion(models.Model):
     question = models.TextField()
     suggested_answer = models.TextField(blank=True)
     follow_up_question = models.TextField(blank=True)
+    difficulty = models.CharField(max_length=20, blank=True)
+    category = models.CharField(max_length=40, blank=True)
+    examiner_tip = models.TextField(blank=True)
     display_order = models.PositiveIntegerField(default=0)
 
     class Meta:

@@ -10,6 +10,7 @@ from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .glossary_service import GlossaryGenerationError, generate_glossary
 from .models import Paper
 from .quiz_service import QuizGenerationError, generate_quiz
+from .viva_service import VivaGenerationError, generate_viva_questions
 from .services import (
     _get_user_facing_error_message,
     build_workspace_context,
@@ -255,7 +256,26 @@ def paper_quiz(request, paper_id):
 
 @login_required(login_url='login')
 def paper_viva(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+
+    if request.method == 'POST':
+        try:
+            generate_viva_questions(paper)
+            messages.success(request, 'Viva questions generated successfully.')
+        except VivaGenerationError as exc:
+            logger.warning('Paper ID %s: viva generation failed: %s', paper.id, exc)
+            messages.error(request, str(exc))
+        return redirect('paper_viva', paper_id=paper.id)
+
     context = build_workspace_context(request.user, paper_id, 'viva')
+    viva_questions = list(paper.viva_questions.all().order_by('display_order', 'id'))
+    grouped_viva_questions = {}
+    for question in viva_questions:
+        category_name = question.category or 'Basic Understanding'
+        grouped_viva_questions.setdefault(category_name, []).append(question)
+
+    context['viva_questions'] = viva_questions
+    context['grouped_viva_questions'] = grouped_viva_questions
     return render(request, 'papers/workspace/viva.html', context)
 
 
