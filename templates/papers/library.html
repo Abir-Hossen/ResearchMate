@@ -1,52 +1,147 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
         <h2 class="h4 mb-1">My Papers</h2>
-        <p class="text-muted mb-0">Manage your uploaded papers in one place.</p>
+        <p class="text-muted mb-0">Your personal research library.</p>
     </div>
     <a class="btn btn-primary" href="{% url 'upload_paper' %}">Upload Paper</a>
 </div>
 
-<form method="get" class="row g-2 mb-4">
-    <div class="col-md-8">
-        <input type="text" class="form-control" name="q" value="{{ query }}" placeholder="Search by paper title">
+<form method="get" class="row g-2 align-items-center mb-4">
+    <div class="col-md-6 col-lg-7">
+        <input type="text" class="form-control" name="q" value="{{ query }}" placeholder="Search by title or original filename">
     </div>
-    <div class="col-md-4">
-        <button type="submit" class="btn btn-outline-primary w-100">Search</button>
+    <div class="col-md-3 col-lg-2">
+        <select class="form-select" name="sort">
+            <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest First</option>
+            <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest First</option>
+            <option value="title_asc" {% if sort == 'title_asc' %}selected{% endif %}>Title A-Z</option>
+            <option value="title_desc" {% if sort == 'title_desc' %}selected{% endif %}>Title Z-A</option>
+            <option value="progress_high" {% if sort == 'progress_high' %}selected{% endif %}>Progress High → Low</option>
+            <option value="progress_low" {% if sort == 'progress_low' %}selected{% endif %}>Progress Low → High</option>
+        </select>
+    </div>
+    <div class="col-md-3 col-lg-3 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-primary flex-fill">Search</button>
+        {% if query or status_filter != 'all' or sort != 'newest' %}
+            <a href="{% url 'my_papers' %}" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
     </div>
 </form>
 
+<div class="d-flex flex-wrap gap-2 mb-4">
+    {% with current=status_filter %}
+        <a href="{% url 'my_papers' %}?{% if query %}q={{ query }}&{% endif %}sort={{ sort }}" class="btn btn-sm {% if current == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">All</a>
+        <a href="{% url 'my_papers' %}?{% if query %}q={{ query }}&{% endif %}status=not_started&sort={{ sort }}" class="btn btn-sm {% if current == 'not_started' %}btn-primary{% else %}btn-outline-primary{% endif %}">Not Started</a>
+        <a href="{% url 'my_papers' %}?{% if query %}q={{ query }}&{% endif %}status=in_progress&sort={{ sort }}" class="btn btn-sm {% if current == 'in_progress' %}btn-primary{% else %}btn-outline-primary{% endif %}">In Progress</a>
+        <a href="{% url 'my_papers' %}?{% if query %}q={{ query }}&{% endif %}status=completed&sort={{ sort }}" class="btn btn-sm {% if current == 'completed' %}btn-primary{% else %}btn-outline-primary{% endif %}">Completed</a>
+    {% endwith %}
+</div>
+
 {% if papers %}
     <div class="row g-4">
-        {% for paper in papers %}
+        {% for item in papers %}
             <div class="col-12 col-lg-6">
                 <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div class="card-body d-flex flex-column h-100">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                             <div>
-                                <h3 class="h6 mb-2">{{ paper.title }}</h3>
-                                <p class="text-muted small mb-1">Uploaded: {{ paper.uploaded_at|date:"M d, Y" }}</p>
-                                <p class="text-muted small mb-1">Status: {{ paper.processing_status }}</p>
-                                <p class="text-muted small mb-0">File: {{ paper.pdf_file.name|cut:'papers/' }}</p>
+                                <h3 class="h5 mb-2">{{ item.paper.title }}</h3>
+                                <p class="text-muted small mb-1">Uploaded {{ item.paper.uploaded_at|date:"d M Y" }}</p>
                             </div>
-                            <span class="badge bg-primary-subtle text-primary">PDF</span>
+                            {% if item.is_completed %}
+                                <span class="badge bg-success-subtle text-success">Completed</span>
+                            {% elif item.status == 'In Progress' %}
+                                <span class="badge bg-warning-subtle text-warning">In Progress</span>
+                            {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary">Not Started</span>
+                            {% endif %}
                         </div>
-                    </div>
-                    <div class="card-footer bg-white border-0 d-flex justify-content-between align-items-center">
-                        <a class="btn btn-outline-primary btn-sm" href="{% url 'paper_overview' paper.pk %}">Open Workspace</a>
-                        <a class="btn btn-outline-danger btn-sm" href="{% url 'delete_paper' paper.pk %}">Delete</a>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small text-muted">Learning Progress</span>
+                                <span class="small fw-semibold">{{ item.completion_percentage }}%</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar {% if item.is_completed %}bg-success{% else %}bg-primary{% endif %}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ item.completion_percentage }}" style="width: {{ item.completion_percentage }}%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="small text-muted mb-2">Current Status</div>
+                            <div class="fw-semibold">{{ item.status }}</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="small text-muted mb-2">Learning Modules</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for label, is_complete in item.module_badges %}
+                                    <span class="badge {% if is_complete %}bg-primary-subtle text-primary{% else %}bg-light text-muted{% endif %}">
+                                        {% if is_complete %}✓{% else %}○{% endif %} {{ label }}
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="mt-auto d-flex justify-content-between align-items-center gap-2">
+                            <a href="{% url 'paper_overview' item.paper.pk %}" class="btn btn-outline-primary btn-sm">
+                                {% if item.is_completed %}Open Learning Hub{% else %}Continue Learning{% endif %}
+                            </a>
+
+                            <div class="dropdown">
+                                <button class="btn btn-light btn-sm border dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Paper actions">
+                                    ⋮
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item disabled" href="#">Rename</a></li>
+                                    <li><a class="dropdown-item" href="{{ item.paper.pdf_file.url }}" target="_blank" rel="noopener">Download Original PDF</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-danger" href="{% url 'delete_paper' item.paper.pk %}">Delete Paper</a></li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         {% endfor %}
     </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="mt-4" aria-label="My Papers pagination">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter != 'all' %}status={{ status_filter }}&{% endif %}sort={{ sort }}&page={{ page_obj.previous_page_number }}">Previous</a>
+                    </li>
+                {% endif %}
+
+                {% for page_num in page_obj.paginator.page_range %}
+                    {% if page_num == page_obj.number %}
+                        <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                    {% elif page_num >= page_obj.number|add:'-1' and page_num <= page_obj.number|add:'1' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter != 'all' %}status={{ status_filter }}&{% endif %}sort={{ sort }}&page={{ page_num }}">{{ page_num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter != 'all' %}status={{ status_filter }}&{% endif %}sort={{ sort }}&page={{ page_obj.next_page_number }}">Next</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    {% endif %}
 {% else %}
     <div class="card border-0 shadow-sm">
         <div class="card-body text-center py-5">
-            <h3 class="h5">No papers yet</h3>
-            <p class="text-muted mb-0">Upload your first paper to start building your collection.</p>
+            <h3 class="h5 mb-3">No research papers yet.</h3>
+            <p class="text-muted mb-3">Upload your first paper to begin learning.</p>
+            <a class="btn btn-primary" href="{% url 'upload_paper' %}">Upload Paper</a>
         </div>
     </div>
 {% endif %}

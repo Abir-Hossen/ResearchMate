@@ -3,10 +3,19 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.paginator import Paginator
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from django.utils import timezone
 
+from .dashboard_service import (
+    get_completion_percentage,
+    get_module_completion_checks,
+    get_missing_modules,
+    get_paper_status,
+    is_paper_completed,
+)
 from .forms import PaperUploadForm
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .glossary_service import GlossaryGenerationError, generate_glossary
@@ -51,12 +60,82 @@ def upload_paper_view(request):
 @login_required(login_url='login')
 def my_papers_view(request):
     query = request.GET.get('q', '').strip()
-    papers = Paper.objects.filter(owner=request.user).order_by('-uploaded_at')
+    status_filter = request.GET.get('status', 'all').lower()
+    sort_option = request.GET.get('sort', 'newest').lower()
+
+    papers = (
+        Paper.objects.filter(owner=request.user)
+        .select_related('ai_analysis', 'learning_progress')
+        .prefetch_related(
+            'glossary_terms',
+            'flashcards',
+            'quiz_questions',
+            'viva_questions',
+            'section_learning_sections',
+        )
+        .order_by('-uploaded_at')
+    )
 
     if query:
-        papers = papers.filter(title__icontains=query)
+        papers = papers.filter(Q(title__icontains=query) | Q(pdf_file__icontains=query))
 
-    return render(request, 'papers/library.html', {'papers': papers, 'query': query})
+    paper_items = []
+    for paper in papers:
+        status = get_paper_status(paper)
+        if status_filter != 'all':
+            expected = {
+                'not_started': 'Not Started',
+                'in_progress': 'In Progress',
+                'completed': 'Completed',
+            }.get(status_filter)
+            if expected is None or status != expected:
+                continue
+
+        module_checks = get_module_completion_checks(paper)
+        badge_map = [
+            ('Beginner', module_checks.get('beginner', False)),
+            ('Technical', module_checks.get('technical', False)),
+            ('Sections', module_checks.get('section_learning', False)),
+            ('Glossary', module_checks.get('glossary', False)),
+            ('Flashcards', module_checks.get('flashcards', False)),
+            ('Quiz', module_checks.get('quiz', False)),
+            ('Viva', module_checks.get('viva', False)),
+            ('Notes', module_checks.get('notes', False)),
+        ]
+        paper_items.append({
+            'paper': paper,
+            'status': status,
+            'completion_percentage': get_completion_percentage(paper),
+            'is_completed': is_paper_completed(paper),
+            'module_badges': badge_map,
+            'missing_modules': get_missing_modules(paper),
+        })
+
+    if sort_option == 'oldest':
+        paper_items.sort(key=lambda item: item['paper'].uploaded_at)
+    elif sort_option == 'title_asc':
+        paper_items.sort(key=lambda item: item['paper'].title.lower())
+    elif sort_option == 'title_desc':
+        paper_items.sort(key=lambda item: item['paper'].title.lower(), reverse=True)
+    elif sort_option == 'progress_high':
+        paper_items.sort(key=lambda item: item['completion_percentage'], reverse=True)
+    elif sort_option == 'progress_low':
+        paper_items.sort(key=lambda item: item['completion_percentage'])
+    else:
+        paper_items.sort(key=lambda item: item['paper'].uploaded_at, reverse=True)
+
+    paginator = Paginator(paper_items, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'papers/library.html', {
+        'papers': page_obj.object_list,
+        'page_obj': page_obj,
+        'query': query,
+        'status_filter': status_filter,
+        'sort': sort_option,
+        'has_papers': bool(page_obj.object_list),
+    })
 
 
 @login_required(login_url='login')

@@ -60,6 +60,16 @@ def get_missing_modules(paper):
     return missing
 
 
+def get_paper_status(paper):
+    if is_paper_completed(paper):
+        return 'Completed'
+
+    module_checks = get_module_completion_checks(paper)
+    if not any(module_checks.values()):
+        return 'Not Started'
+    return 'In Progress'
+
+
 def get_dashboard_data(user):
     papers = (
         Paper.objects.filter(owner=user)
