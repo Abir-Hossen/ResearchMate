@@ -131,6 +131,15 @@ class PaperUploadTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_anonymous_user_cannot_access_private_paper_workspace(self):
+        owner = User.objects.create_user(username='workspaceowneranon', password='Secret123')
+        paper = Paper.objects.create(owner=owner, title='Login Protected Paper', pdf_file=SimpleUploadedFile('protected.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+
+        response = self.client.get(reverse('paper_sections', args=[paper.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/login/', response.url)
+
     def test_workspace_beginner_page_renders_paper_context(self):
         user = User.objects.create_user(username='workspacebeginner', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Study Paper', pdf_file=SimpleUploadedFile('study.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
