@@ -1,18 +1,20 @@
 # ResearchMate
 
-## AI provider configuration
+ResearchMate is an AI-powered research paper learning platform designed to help students understand complex research papers through a personalized and structured learning experience.
 
-ResearchMate uses a settings-driven AI provider selection flow.
+Users can upload a research paper and generate:
 
-Set the provider with:
+- 📖 Beginner Explanation
+- 🔬 Technical Explanation
+- 📚 Glossary
+- 📝 Quiz
+- 📌 Notes
+- 🎤 Viva Preparation
 
-- `AI_PROVIDER=groq` for the real Groq-backed provider during local development
-- `AI_PROVIDER=mock` for deterministic local testing or offline development
+## Tech Stack
 
-Example:
-
-```env
-AI_PROVIDER=groq
-```
-
-Use `mock` when you want the application to generate built-in mock learning responses without calling Groq.
+- **Backend:** Django, Python
+- **Frontend:** HTML, CSS, Tailwind CSS
+- **Database:** SQLite
+- **AI:** Generative AI APIs
+- **PDF Processing:** PyMuPDF
