@@ -1,0 +1,38 @@
+{% extends "admin/index.html" %}
+
+{% block content %}
+  <div class="module" style="margin-bottom: 24px;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 12px 14px; background: #f3f3f3; border-bottom: 1px solid #ddd;">Platform Metrics</th>
+          <th style="text-align: right; padding: 12px 14px; background: #f3f3f3; border-bottom: 1px solid #ddd;">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding: 10px 14px; border-bottom: 1px solid #eee;">Total Users</td>
+          <td style="padding: 10px 14px; text-align: right; border-bottom: 1px solid #eee;">{{ total_users }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 14px; border-bottom: 1px solid #eee;">Total Papers</td>
+          <td style="padding: 10px 14px; text-align: right; border-bottom: 1px solid #eee;">{{ total_papers }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 14px; border-bottom: 1px solid #eee;">Papers Processed</td>
+          <td style="padding: 10px 14px; text-align: right; border-bottom: 1px solid #eee;">{{ papers_processed }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 14px; border-bottom: 1px solid #eee;">Failed AI Jobs</td>
+          <td style="padding: 10px 14px; text-align: right; border-bottom: 1px solid #eee;">{{ failed_ai_jobs }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 14px;">Average Completion</td>
+          <td style="padding: 10px 14px; text-align: right;">{{ average_completion }}%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  {{ block.super }}
+{% endblock %}

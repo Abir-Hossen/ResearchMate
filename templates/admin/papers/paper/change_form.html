@@ -1,0 +1,29 @@
+{% extends 'admin/change_form.html' %}
+
+{% block after_field_sets %}
+  {% if original %}
+    <div class="module aligned" style="margin: 20px 0; padding: 16px; border: 1px solid #d6d6d6; background: #fff; border-radius: 6px;">
+      <h2 style="margin-top: 0; margin-bottom: 12px;">Paper Administration Overview</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+        <div><strong>Title:</strong> {{ original.title }}</div>
+        <div><strong>Owner:</strong> {{ original.owner }}</div>
+        <div><strong>Uploaded:</strong> {{ original.uploaded_at|date:"M d, Y" }}</div>
+        <div><strong>Processing:</strong> {{ original.processing_status }}</div>
+        <div><strong>Learning Progress:</strong> {{ original.completion_percentage|default:0 }}%</div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <h3 style="margin-bottom: 10px;">AI Content</h3>
+        <ul style="margin: 0; padding-left: 18px; line-height: 1.8;">
+          <li>Beginner Explanation: {% if original.ai_analysis and original.ai_analysis.beginner_explanation %}✓{% else %}—{% endif %}</li>
+          <li>Technical Explanation: {% if original.ai_analysis and original.ai_analysis.technical_explanation %}✓{% else %}—{% endif %}</li>
+          <li>Section Learning: {% if original.section_learning_sections.exists %}✓{% else %}—{% endif %}</li>
+          <li>Glossary: {% if original.glossary_terms.exists %}✓{% else %}—{% endif %}</li>
+          <li>Flashcards: {% if original.flashcards.exists %}✓{% else %}—{% endif %}</li>
+          <li>Quiz: {% if original.quiz_questions.exists %}✓{% else %}—{% endif %}</li>
+          <li>Viva Preparation: {% if original.viva_questions.exists %}✓{% else %}—{% endif %}</li>
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

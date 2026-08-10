@@ -21,6 +21,11 @@ class Paper(models.Model):
         return self.title
 
     @property
+    def completion_percentage(self):
+        from .dashboard_service import get_completion_percentage
+        return get_completion_percentage(self)
+
+    @property
     def content_status(self):
         try:
             return self.content.extraction_status

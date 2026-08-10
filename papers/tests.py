@@ -5,7 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.contrib import admin
 from django.contrib.auth.models import User
+from django.test import RequestFactory
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -57,6 +59,57 @@ class GroqConnectivityTests(TestCase):
             self.assertEqual(project_settings.GROQ_MODEL, 'test-model')
         finally:
             temp_path.unlink(missing_ok=True)
+
+
+class AdminMonitoringTests(TestCase):
+    def test_admin_problem_monitoring_filters_are_configured(self):
+        from .admin import AIAnalysisAdmin, LearningProgressAdmin, PaperAdmin
+
+        self.assertIn('processing_status', PaperAdmin.list_filter)
+        self.assertIn('ai_analysis__analysis_status', PaperAdmin.list_filter)
+        self.assertIn('ai_analysis__ai_model', PaperAdmin.list_filter)
+        self.assertIn('title', PaperAdmin.search_fields)
+        self.assertIn('owner__username', PaperAdmin.search_fields)
+
+        self.assertIn('analysis_status', AIAnalysisAdmin.list_filter)
+        self.assertIn('ai_model', AIAnalysisAdmin.list_filter)
+        self.assertIn('paper__processing_status', AIAnalysisAdmin.list_filter)
+        self.assertIn('paper__title', AIAnalysisAdmin.search_fields)
+
+        self.assertIn('overall_progress', LearningProgressAdmin.list_filter)
+        self.assertIn('paper__title', LearningProgressAdmin.search_fields)
+
+
+class AdminSecurityTests(TestCase):
+    def test_non_staff_user_cannot_access_admin(self):
+        user = User.objects.create_user(username='basicuser', password='Secret123')
+        self.client.force_login(user)
+
+        response = self.client.get('/admin/')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/admin/login/', response.url)
+
+    def test_staff_user_can_access_admin_index(self):
+        user = User.objects.create_user(username='adminuser', password='Secret123', is_staff=True, is_superuser=True)
+        self.client.force_login(user)
+
+        response = self.client.get('/admin/')
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_ai_generated_content_admin_is_read_only(self):
+        request = RequestFactory().get('/admin/')
+        request.user = User.objects.create_user(username='securityadmin', password='Secret123', is_staff=True, is_superuser=True)
+
+        from .admin import AIAnalysisAdmin
+        from .models import AIAnalysis
+
+        admin_obj = AIAnalysisAdmin(AIAnalysis, admin.site)
+
+        self.assertFalse(admin_obj.has_add_permission(request))
+        self.assertFalse(admin_obj.has_change_permission(request))
+        self.assertFalse(admin_obj.has_delete_permission(request))
 
 
 class PaperUploadTests(TestCase):
