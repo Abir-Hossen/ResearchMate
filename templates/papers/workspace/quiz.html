@@ -24,7 +24,7 @@
         {% endif %}
 
         {% if not quiz_questions %}
-            <div class="text-center py-4">
+            <div class="empty-state">
                 <p class="text-muted mb-3">No quiz questions have been generated yet.</p>
                 <form method="post">
                     {% csrf_token %}
@@ -33,7 +33,7 @@
                 </form>
             </div>
         {% elif show_results %}
-            <div class="mb-3">
+            <div class="mb-4 border rounded p-3 bg-light-subtle">
                 <h5 class="mb-1">Score: {{ correct_answers }}/{{ total_questions }}</h5>
                 <p class="text-muted mb-0">{{ percentage }}% - {% if passed %}Pass{% else %}Needs Improvement{% endif %}</p>
             </div>
@@ -57,12 +57,12 @@
             </form>
         {% else %}
             <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex justify-content-between align-items-center gap-2">
                     <span class="text-muted">Question {{ question_index|add:1 }} of {{ question_count }}</span>
                     <span class="badge bg-light text-dark">{{ current_question.difficulty|default:'Medium' }}</span>
                 </div>
-                <div class="progress mt-2" style="height: 6px;">
-                    <div class="progress-bar" role="progressbar" style="width: {% widthratio question_index question_count 100 %}%;"></div>
+                <div class="progress mt-2" aria-label="Current quiz progress">
+                    <div class="progress-bar" role="progressbar" aria-valuenow="{{ question_index|add:1 }}" aria-valuemin="0" aria-valuemax="{{ question_count }}" style="width: {% widthratio question_index question_count 100 %}%;"></div>
                 </div>
             </div>
             <form method="post">
@@ -72,19 +72,19 @@
                 <div class="border rounded p-3 mb-3">
                     <p class="fw-semibold mb-3">{{ current_question.question }}</p>
                     <div class="list-group">
-                        <label class="list-group-item">
+                        <label class="list-group-item {% if selected_answer == current_question.option_a %}active{% endif %}">
                             <input class="form-check-input me-2" type="radio" name="selected_answer" value="{{ current_question.option_a }}" {% if selected_answer == current_question.option_a %}checked{% endif %}>
                             {{ current_question.option_a }}
                         </label>
-                        <label class="list-group-item">
+                        <label class="list-group-item {% if selected_answer == current_question.option_b %}active{% endif %}">
                             <input class="form-check-input me-2" type="radio" name="selected_answer" value="{{ current_question.option_b }}" {% if selected_answer == current_question.option_b %}checked{% endif %}>
                             {{ current_question.option_b }}
                         </label>
-                        <label class="list-group-item">
+                        <label class="list-group-item {% if selected_answer == current_question.option_c %}active{% endif %}">
                             <input class="form-check-input me-2" type="radio" name="selected_answer" value="{{ current_question.option_c }}" {% if selected_answer == current_question.option_c %}checked{% endif %}>
                             {{ current_question.option_c }}
                         </label>
-                        <label class="list-group-item">
+                        <label class="list-group-item {% if selected_answer == current_question.option_d %}active{% endif %}">
                             <input class="form-check-input me-2" type="radio" name="selected_answer" value="{{ current_question.option_d }}" {% if selected_answer == current_question.option_d %}checked{% endif %}>
                             {{ current_question.option_d }}
                         </label>

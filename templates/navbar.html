@@ -1,37 +1,30 @@
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="#">ResearchMate</a>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container container-main">
+        <a class="navbar-brand fw-bold" href="{% if user.is_authenticated %}{% url 'dashboard' %}{% else %}{% url 'login' %}{% endif %}">ResearchMate</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarContent">
             {% if user.is_authenticated %}
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-lg-1">
                     <li class="nav-item">
-                        <a class="nav-link active" href="{% url 'dashboard' %}">Dashboard</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'my_papers' %}">My Papers</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'my_papers' %}active{% endif %}" href="{% url 'my_papers' %}">My Papers</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'upload_paper' %}">Upload Paper</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'upload_paper' %}active{% endif %}" href="{% url 'upload_paper' %}">Upload Paper</a>
                     </li>
                 </ul>
-                <div class="dropdown">
-                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Profile
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item disabled" href="#">Profile</a></li>
-                        <li><a class="dropdown-item" href="{% url 'change_password' %}">Change Password</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
-                    </ul>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <a class="btn btn-outline-light btn-sm" href="{% url 'change_password' %}">Change Password</a>
+                    <a class="btn btn-light btn-sm" href="{% url 'logout' %}">Logout</a>
                 </div>
             {% else %}
-                <div class="ms-auto">
+                <div class="ms-auto d-flex align-items-center gap-2">
                     <a class="btn btn-outline-light btn-sm" href="{% url 'login' %}">Login</a>
-                    <a class="btn btn-light btn-sm ms-2" href="{% url 'register' %}">Register</a>
+                    <a class="btn btn-light btn-sm" href="{% url 'register' %}">Register</a>
                 </div>
             {% endif %}
         </div>

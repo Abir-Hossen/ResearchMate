@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row g-4">
-    <div class="col-lg-3">
-        <div class="card border-0 shadow-sm">
+<div class="row g-4 align-items-start">
+    <div class="col-lg-3 workspace-sidebar">
+        <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
+                <p class="section-label mb-2">Learning Hub</p>
                 <h2 class="h5 mb-3">Learning Hub</h2>
-                <div class="list-group">
+                <div class="list-group list-group-flush">
                     <a class="list-group-item list-group-item-action {% if active_tab == 'overview' %}active{% endif %}" href="{% url 'paper_overview' paper.id %}">Overview</a>
                     <a class="list-group-item list-group-item-action {% if active_tab == 'beginner' %}active{% endif %}" href="{% url 'paper_beginner' paper.id %}">Beginner Explanation</a>
                     <a class="list-group-item list-group-item-action {% if active_tab == 'technical' %}active{% endif %}" href="{% url 'paper_technical' paper.id %}">Technical Explanation</a>

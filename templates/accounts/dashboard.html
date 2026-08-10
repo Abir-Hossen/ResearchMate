@@ -1,72 +1,70 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+<div class="page-header">
     <div>
-        <p class="text-muted mb-1">Welcome back</p>
+        <p class="section-label mb-2">Welcome back</p>
         <h2 class="h3 mb-0">{{ user.get_full_name|default:user.username }}</h2>
     </div>
     <a href="{% url 'upload_paper' %}" class="btn btn-primary">Upload Paper</a>
 </div>
 
 {% if total_papers == 0 %}
-    <div class="card border-0 shadow-sm">
-        <div class="card-body text-center py-5">
-            <h3 class="h5 mb-3">You haven't uploaded any research papers yet.</h3>
-            <p class="text-muted mb-0">Upload your first paper to begin learning.</p>
-        </div>
+    <div class="empty-state">
+        <h3 class="h5 mb-3">You haven't uploaded any research papers yet.</h3>
+        <p class="muted-copy mb-3">Upload your first paper to begin learning.</p>
+        <a href="{% url 'upload_paper' %}" class="btn btn-primary">Upload Paper</a>
     </div>
 {% else %}
     <div class="row g-4 mb-5">
         <div class="col-12 col-md-6 col-xl">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card metric-card h-100">
                 <div class="card-body">
-                    <p class="text-muted small mb-2">📄 Total Papers</p>
-                    <p class="text-muted small mb-2">Total uploaded papers</p>
-                    <h3 class="h2 mb-0">{{ total_papers }}</h3>
+                    <p class="metric-label">Total Papers</p>
+                    <h3 class="metric-value">{{ total_papers }}</h3>
+                    <p class="metric-subtext">Uploaded in your library</p>
                 </div>
             </div>
         </div>
 
         <div class="col-12 col-md-6 col-xl">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card metric-card h-100">
                 <div class="card-body">
-                    <p class="text-muted small mb-2">📖 Papers In Progress</p>
-                    <p class="text-muted small mb-2">Papers still in progress</p>
-                    <h3 class="h2 mb-0">{{ papers_in_progress }}</h3>
+                    <p class="metric-label">Papers In Progress</p>
+                    <h3 class="metric-value">{{ papers_in_progress }}</h3>
+                    <p class="metric-subtext">Still being studied</p>
                 </div>
             </div>
         </div>
 
         <div class="col-12 col-md-6 col-xl">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card metric-card h-100">
                 <div class="card-body">
-                    <p class="text-muted small mb-2">✅ Completed Papers</p>
-                    <p class="text-muted small mb-2">Papers fully completed</p>
-                    <h3 class="h2 mb-0">{{ completed_papers_count }}</h3>
+                    <p class="metric-label">Completed Papers</p>
+                    <h3 class="metric-value">{{ completed_papers_count }}</h3>
+                    <p class="metric-subtext">Fully finished</p>
                 </div>
             </div>
         </div>
 
         <div class="col-12 col-md-6 col-xl">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card metric-card h-100">
                 <div class="card-body">
-                    <p class="text-muted small mb-2">📝 Average Quiz Score</p>
-                    <p class="text-muted small mb-2">Average of latest quiz attempts</p>
-                    <h3 class="h2 mb-0">{{ average_quiz_score }}</h3>
+                    <p class="metric-label">Average Quiz Score</p>
+                    <h3 class="metric-value">{{ average_quiz_score }}</h3>
                     {% if no_quizzes_completed %}
-                        <p class="text-muted small mt-3 mb-0">Complete your first quiz to see your average score.</p>
+                        <p class="metric-subtext">Complete your first quiz to see the average here.</p>
                     {% endif %}
                 </div>
             </div>
         </div>
 
         <div class="col-12 col-md-6 col-xl">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card metric-card h-100">
                 <div class="card-body">
-                    <p class="text-muted small mb-2">🎓 Viva Ready</p>
-                    <p class="text-muted small mb-2">Papers with generated viva prep</p>
-                    <h3 class="h2 mb-0">{{ viva_ready_count }}</h3>
+                    <p class="metric-label">Viva Ready</p>
+                    <h3 class="metric-value">{{ viva_ready_count }}</h3>
+                    <p class="metric-subtext">Papers with preparation ready</p>
                 </div>
             </div>
         </div>
@@ -78,27 +76,33 @@
             <div class="row g-3">
                 {% for item in continue_learning %}
                     <div class="col-12 col-lg-6">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-body">
-                                <h4 class="h6 mb-3">{{ item.title }}</h4>
-                                <p class="text-muted small mb-2">Last updated {{ item.updated_at|date:"M d, Y" }}</p>
-                                <p class="text-muted small mb-2">{{ item.completion_percentage }}% Complete</p>
-                                <div class="progress mb-3" style="height: 8px;">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column h-100">
+                                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                                    <h4 class="h6 mb-0">{{ item.title }}</h4>
+                                    <span class="status-badge progress">In Progress</span>
+                                </div>
+                                <p class="help-text mb-2">Last updated {{ item.updated_at|date:"M d, Y" }}</p>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small text-muted">Completion</span>
+                                    <span class="small fw-semibold">{{ item.completion_percentage }}%</span>
+                                </div>
+                                <div class="progress mb-3" aria-label="{{ item.completion_percentage }} percent complete">
                                     <div class="progress-bar" role="progressbar" aria-valuenow="{{ item.completion_percentage }}" aria-valuemin="0" aria-valuemax="100" style="width: {{ item.completion_percentage }}%;"></div>
                                 </div>
-                                <p class="text-muted small mb-3">Missing: {% if item.missing_modules %}• {% for module in item.missing_modules %}{{ module }}{% if not forloop.last %} • {% endif %}{% endfor %}{% else %}None{% endif %}</p>
-                                <a href="{% url 'paper_overview' item.paper.pk %}" class="btn btn-outline-primary btn-sm">Continue Learning</a>
+                                <p class="help-text mb-3">Missing: {% if item.missing_modules %}{% for module in item.missing_modules %}{{ module }}{% if not forloop.last %} • {% endif %}{% endfor %}{% else %}None{% endif %}</p>
+                                <div class="mt-auto">
+                                    <a href="{% url 'paper_overview' item.paper.pk %}" class="btn btn-primary btn-sm">Continue Learning</a>
+                                </div>
                             </div>
                         </div>
                     </div>
                 {% endfor %}
             </div>
         {% else %}
-            <div class="card border-0 shadow-sm">
-                <div class="card-body text-center py-4">
-                    <h4 class="h6 mb-2">Great work!</h4>
-                    <p class="text-muted mb-0">You have completed every uploaded paper.</p>
-                </div>
+            <div class="empty-state">
+                <h4 class="h6 mb-2">Great work!</h4>
+                <p class="muted-copy">You have completed every uploaded paper.</p>
             </div>
         {% endif %}
     </div>
@@ -109,25 +113,30 @@
             <div class="row g-3">
                 {% for item in completed_papers %}
                     <div class="col-12 col-lg-6">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-body">
-                                <h4 class="h6 mb-3">{{ item.title }}</h4>
-                                <p class="text-muted small mb-2">✓ Completed</p>
-                                <p class="text-muted small mb-2">{{ item.completion_percentage }}% Complete</p>
-                                <div class="progress mb-3" style="height: 8px;">
-                                    <div class="progress-bar bg-success" role="progressbar" aria-valuenow="{{ item.completion_percentage }}" aria-valuemin="0" aria-valuemax="100" style="width: {{ item.completion_percentage }}%;"></div>
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column h-100">
+                                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                                    <h4 class="h6 mb-0">{{ item.title }}</h4>
+                                    <span class="status-badge completed">Completed</span>
                                 </div>
-                                <a href="{% url 'paper_overview' item.paper.pk %}" class="btn btn-outline-secondary btn-sm">Open Learning Hub</a>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small text-muted">Completion</span>
+                                    <span class="small fw-semibold">{{ item.completion_percentage }}%</span>
+                                </div>
+                                <div class="progress mb-3" aria-label="{{ item.completion_percentage }} percent complete">
+                                    <div class="progress-bar success" role="progressbar" aria-valuenow="{{ item.completion_percentage }}" aria-valuemin="0" aria-valuemax="100" style="width: {{ item.completion_percentage }}%;"></div>
+                                </div>
+                                <div class="mt-auto">
+                                    <a href="{% url 'paper_overview' item.paper.pk %}" class="btn btn-outline-secondary btn-sm">Open Learning Hub</a>
+                                </div>
                             </div>
                         </div>
                     </div>
                 {% endfor %}
             </div>
         {% else %}
-            <div class="card border-0 shadow-sm">
-                <div class="card-body text-center py-4">
-                    <p class="text-muted mb-0">You haven't completed any papers yet.</p>
-                </div>
+            <div class="empty-state">
+                <p class="muted-copy">You haven't completed any papers yet.</p>
             </div>
         {% endif %}
     </div>
@@ -138,19 +147,32 @@
             <div class="row g-3">
                 {% for item in recent_papers %}
                     <div class="col-12 col-lg-6">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-body">
-                                <h4 class="h6 mb-3">{{ item.title }}</h4>
-                                <p class="text-muted small mb-2">Uploaded {{ item.uploaded_at|date:"M d, Y" }}</p>
-                                <p class="text-muted small mb-2">{{ item.completion_percentage }}% Complete</p>
-                                <div class="progress mb-3" style="height: 8px;">
-                                    <div class="progress-bar {% if item.is_completed %}bg-success{% endif %}" role="progressbar" aria-valuenow="{{ item.completion_percentage }}" aria-valuemin="0" aria-valuemax="100" style="width: {{ item.completion_percentage }}%;"></div>
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column h-100">
+                                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                                    <h4 class="h6 mb-0">{{ item.title }}</h4>
+                                    {% if item.is_completed %}
+                                        <span class="status-badge completed">Completed</span>
+                                    {% else %}
+                                        <span class="status-badge progress">{{ item.status }}</span>
+                                    {% endif %}
                                 </div>
-                                <p class="text-muted small mb-3">Status: {{ item.status }}</p>
+                                <p class="help-text mb-2">Uploaded {{ item.uploaded_at|date:"M d, Y" }}</p>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small text-muted">Completion</span>
+                                    <span class="small fw-semibold">{{ item.completion_percentage }}%</span>
+                                </div>
+                                <div class="progress mb-3" aria-label="{{ item.completion_percentage }} percent complete">
+                                    <div class="progress-bar {% if item.is_completed %}success{% endif %}" role="progressbar" aria-valuenow="{{ item.completion_percentage }}" aria-valuemin="0" aria-valuemax="100" style="width: {{ item.completion_percentage }}%;"></div>
+                                </div>
                                 {% if item.is_completed %}
-                                    <span class="text-success small fw-semibold">✓ Completed</span>
+                                    <div class="mt-auto">
+                                        <a href="{% url 'paper_overview' item.paper.pk %}" class="btn btn-outline-primary btn-sm">Open Learning Hub</a>
+                                    </div>
                                 {% else %}
-                                    <a href="{% url 'paper_overview' item.paper.pk %}" class="btn btn-outline-primary btn-sm">Continue →</a>
+                                    <div class="mt-auto">
+                                        <a href="{% url 'paper_overview' item.paper.pk %}" class="btn btn-primary btn-sm">Continue Learning</a>
+                                    </div>
                                 {% endif %}
                             </div>
                         </div>
@@ -159,14 +181,12 @@
             </div>
             {% if show_view_all_recent %}
                 <div class="mt-3 text-end">
-                    <a href="{% url 'my_papers' %}" class="btn btn-link text-decoration-none p-0">View All Papers →</a>
+                    <a href="{% url 'my_papers' %}" class="btn btn-link">View All Papers</a>
                 </div>
             {% endif %}
         {% else %}
-            <div class="card border-0 shadow-sm">
-                <div class="card-body text-center py-4">
-                    <p class="text-muted mb-0">No recent papers.</p>
-                </div>
+            <div class="empty-state">
+                <p class="muted-copy">No recent papers.</p>
             </div>
         {% endif %}
     </div>
