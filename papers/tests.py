@@ -777,7 +777,7 @@ class PaperUploadTests(TestCase):
         self.assertContains(response, 'Paper is prepared for AI learning')
 
     @override_settings(AI_PROVIDER='mock')
-    def test_start_learning_generates_mock_learning_materials(self):
+    def test_start_learning_only_generates_beginner_content_from_initial_pipeline(self):
         user = User.objects.create_user(username='mocklearner', password='Secret123')
         buffer = BytesIO()
         pdf_canvas = canvas.Canvas(buffer)
@@ -796,15 +796,22 @@ class PaperUploadTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(AIAnalysis.objects.filter(paper=paper).exists())
-        self.assertTrue(Glossary.objects.filter(paper=paper).exists())
-        self.assertTrue(Flashcard.objects.filter(paper=paper).exists())
+        self.assertFalse(Glossary.objects.filter(paper=paper).exists())
+        self.assertFalse(Flashcard.objects.filter(paper=paper).exists())
         self.assertFalse(QuizQuestion.objects.filter(paper=paper).exists())
-        self.assertTrue(VivaQuestion.objects.filter(paper=paper).exists())
+        self.assertFalse(VivaQuestion.objects.filter(paper=paper).exists())
         self.assertTrue(LearningProgress.objects.filter(paper=paper).exists())
 
+        progress = paper.learning_progress
+        self.assertTrue(progress.beginner_completed)
+        self.assertFalse(progress.glossary_completed)
+        self.assertFalse(progress.flashcards_completed)
+        self.assertFalse(progress.quiz_completed)
+        self.assertFalse(progress.viva_completed)
+
     @override_settings(AI_PROVIDER='groq', GROQ_API_KEY='test-key', GROQ_MODEL='llama-3.3-70b-versatile')
-    @patch('papers.ai_providers.GroqProvider.generate', return_value='{"beginner_explanation":"A simple explanation","technical_explanation":"A technical explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"Needs background knowledge"},"section_learning":[{"section":"Introduction","summary":"Read the intro first"}],"glossary":[{"term":"Neuron","simple_explanation":"A nerve cell","technical_explanation":"Specialized cell transmitting signals","example":"Neurons communicate through synapses"}],"flashcards":[{"question":"What is a neuron?","answer":"A nerve cell"}],"viva_questions":[{"question":"What is the main contribution?","suggested_answer":"It advances the field","follow_up_question":"Why is it significant?"}]}')
-    def test_start_learning_uses_groq_payload_to_create_learning_materials(self, mock_generate):
+    @patch('papers.ai_providers.GroqProvider.generate', return_value='{"beginner_explanation":"A simple explanation","technical_explanation":"A technical explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"Needs background knowledge"},"section_learning":[{"section":"Introduction","summary":"Read the intro first"}],"glossary":[{"term":"Neuron","simple_explanation":"A nerve cell","technical_explanation":"Specialized cell transmitting signals","example":"Neurons communicate through synapses"}],"flashcards":[{"question":"What is a neuron?","answer":"A nerve cell"}],"quiz_questions":[{"question":"What is a neuron?","options":["A","B","C","D"],"correct_answer":1,"difficulty":"Easy","explanation":"It is a nerve cell."}],"viva_questions":[{"question":"What is the main contribution?","suggested_answer":"It advances the field","follow_up_question":"Why is it significant?"}]}')
+    def test_beginner_generation_does_not_create_other_learning_modules(self, mock_generate):
         user = User.objects.create_user(username='groqlearner', password='Secret123')
         buffer = BytesIO()
         pdf_canvas = canvas.Canvas(buffer)
@@ -822,13 +829,21 @@ class PaperUploadTests(TestCase):
         response = self.client.post(reverse('start_learning', args=[paper.pk]), follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(AIAnalysis.objects.filter(paper=paper).exists())
-        self.assertTrue(Glossary.objects.filter(paper=paper).exists())
-        self.assertTrue(Flashcard.objects.filter(paper=paper).exists())
-        self.assertTrue(VivaQuestion.objects.filter(paper=paper).exists())
         analysis = AIAnalysis.objects.get(paper=paper)
         self.assertEqual(analysis.analysis_status, 'Ready')
         self.assertEqual(analysis.ai_model, 'groq')
+        self.assertEqual(analysis.beginner_explanation, 'A simple explanation')
+        self.assertFalse(Glossary.objects.filter(paper=paper).exists())
+        self.assertFalse(Flashcard.objects.filter(paper=paper).exists())
+        self.assertFalse(QuizQuestion.objects.filter(paper=paper).exists())
+        self.assertFalse(VivaQuestion.objects.filter(paper=paper).exists())
+
+        progress = paper.learning_progress
+        self.assertTrue(progress.beginner_completed)
+        self.assertFalse(progress.glossary_completed)
+        self.assertFalse(progress.flashcards_completed)
+        self.assertFalse(progress.quiz_completed)
+        self.assertFalse(progress.viva_completed)
 
     @override_settings(AI_PROVIDER='groq', GROQ_API_KEY='test-key', GROQ_MODEL='llama-3.3-70b-versatile')
     @patch('papers.ai_providers.GroqProvider.generate', side_effect=RuntimeError('Groq unavailable'))

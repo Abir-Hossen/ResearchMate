@@ -51,61 +51,16 @@ class MockPayloadParser:
         analysis.generated_at = timezone.now()
         analysis.save()
 
-        Glossary.objects.filter(paper=paper).delete()
-        for index, item in enumerate(self.payload['glossary_terms'], start=1):
-            Glossary.objects.create(
-                paper=paper,
-                term=item['term'],
-                simple_explanation=item.get('simple_explanation', ''),
-                technical_explanation=item.get('technical_explanation', ''),
-                example=item.get('example', ''),
-                display_order=index,
-            )
-
-        Flashcard.objects.filter(paper=paper).delete()
-        for index, item in enumerate(self.payload['flashcards'], start=1):
-            Flashcard.objects.create(
-                paper=paper,
-                question=item['question'],
-                answer=item['answer'],
-                display_order=index,
-            )
-
-        QuizQuestion.objects.filter(paper=paper).delete()
-        for index, item in enumerate(self.payload['quiz_questions'], start=1):
-            QuizQuestion.objects.create(
-                paper=paper,
-                question=item['question'],
-                option_a=item['option_a'],
-                option_b=item['option_b'],
-                option_c=item['option_c'],
-                option_d=item['option_d'],
-                correct_answer=item['correct_answer'],
-                explanation=item.get('explanation', ''),
-                difficulty=item.get('difficulty', ''),
-                display_order=index,
-            )
-
-        VivaQuestion.objects.filter(paper=paper).delete()
-        for index, item in enumerate(self.payload['viva_questions'], start=1):
-            VivaQuestion.objects.create(
-                paper=paper,
-                question=item['question'],
-                suggested_answer=item.get('suggested_answer', ''),
-                follow_up_question=item.get('follow_up_question', ''),
-                display_order=index,
-            )
-
         progress, created = LearningProgress.objects.get_or_create(paper=paper)
         progress.overview_completed = True
         progress.beginner_completed = True
-        progress.technical_completed = True
-        progress.glossary_completed = True
-        progress.flashcards_completed = True
-        progress.quiz_completed = True
-        progress.viva_completed = True
+        progress.technical_completed = False
+        progress.glossary_completed = False
+        progress.flashcards_completed = False
+        progress.quiz_completed = False
+        progress.viva_completed = False
         progress.notes_completed = False
-        progress.overall_progress = 100
+        progress.overall_progress = 25
         progress.last_accessed = timezone.now()
         progress.save()
 
@@ -163,61 +118,16 @@ class GroqPayloadParser:
         if analysis_status != 'Ready':
             return analysis
 
-        Glossary.objects.filter(paper=paper).delete()
-        for index, item in enumerate(self.payload.get('glossary', []), start=1):
-            Glossary.objects.create(
-                paper=paper,
-                term=item.get('term', ''),
-                simple_explanation=item.get('simple_explanation', ''),
-                technical_explanation=item.get('technical_explanation', ''),
-                example=item.get('example', ''),
-                display_order=index,
-            )
-
-        Flashcard.objects.filter(paper=paper).delete()
-        for index, item in enumerate(self.payload.get('flashcards', []), start=1):
-            Flashcard.objects.create(
-                paper=paper,
-                question=item.get('question', ''),
-                answer=item.get('answer', ''),
-                display_order=index,
-            )
-
-        QuizQuestion.objects.filter(paper=paper).delete()
-        for index, item in enumerate(self.payload.get('quiz_questions', []), start=1):
-            QuizQuestion.objects.create(
-                paper=paper,
-                question=item.get('question', ''),
-                option_a=item.get('option_a', ''),
-                option_b=item.get('option_b', ''),
-                option_c=item.get('option_c', ''),
-                option_d=item.get('option_d', ''),
-                correct_answer=item.get('correct_answer', ''),
-                explanation=item.get('explanation', ''),
-                difficulty=item.get('difficulty', ''),
-                display_order=index,
-            )
-
-        VivaQuestion.objects.filter(paper=paper).delete()
-        for index, item in enumerate(self.payload.get('viva_questions', []), start=1):
-            VivaQuestion.objects.create(
-                paper=paper,
-                question=item.get('question', ''),
-                suggested_answer=item.get('suggested_answer', ''),
-                follow_up_question=item.get('follow_up_question', ''),
-                display_order=index,
-            )
-
         progress, created = LearningProgress.objects.get_or_create(paper=paper)
         progress.overview_completed = True
         progress.beginner_completed = True
         progress.technical_completed = False
-        progress.glossary_completed = bool(self.payload.get('glossary'))
-        progress.flashcards_completed = bool(self.payload.get('flashcards'))
-        progress.quiz_completed = bool(self.payload.get('quiz_questions'))
-        progress.viva_completed = bool(self.payload.get('viva_questions'))
+        progress.glossary_completed = False
+        progress.flashcards_completed = False
+        progress.quiz_completed = False
+        progress.viva_completed = False
         progress.notes_completed = False
-        progress.overall_progress = 50
+        progress.overall_progress = 25
         progress.last_accessed = timezone.now()
         progress.save()
 
