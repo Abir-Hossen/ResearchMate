@@ -1,4 +1,5 @@
-def _compact_section_text(section_text, max_chars=6000):
+def _compact_section_text(section_text, max_chars=8000):
+    """Compact paper text to stay within token limits while preserving content."""
     if not section_text:
         return ''
 
@@ -12,77 +13,44 @@ def _compact_section_text(section_text, max_chars=6000):
     return truncated + ' [truncated]'
 
 
-def build_section_learning_prompt(section_title, section_text=None):
-    if section_text is None:
-        return f"""You are a reading tutor for a research paper.
+def build_section_learning_prompt(extracted_text, paper_context=None):
+    """Build a prompt for whole-paper section detection and explanation generation."""
+    if not extracted_text:
+        return ''
 
-Analyze the paper text below and identify every major section that should be explained to a student.
+    compact_text = _compact_section_text(extracted_text)
+    return f"""You are an expert academic reading tutor. Analyze the following research paper text. Identify every major section that exists in the paper, then write a professional, paper-specific explanation for each section.
 
 Paper text:
-{section_title}
+{compact_text}
 
-Return ONLY valid JSON with this schema:
+Return ONLY valid JSON with this exact schema:
 {{
   "sections": [
     {{
       "title": "Section Name",
-      "order": 1
+      "explanation": "100-150 word professional explanation grounded in the paper text."
     }}
   ]
 }}
 
-When you later explain a section, use this schema:
-{{
-  "summary": "A concise explanation",
-  "purpose": "Why this section exists",
-  "key_points": ["..."],
-  "important_terms": ["..."],
-  "student_note": "What the student should understand"
-}}
-
 Rules:
-- Do not stop after Introduction or Related Work.
-- cover the full paper
-- Use short, clear section titles.
-- Return valid JSON only.
-"""
-
-    compact_text = _compact_section_text(section_text)
-    return f"""You are a reading tutor for a research paper.
-
-Explain only the section below. Do not summarize the whole paper.
-
-Section title:
-{section_title}
-
-Section text:
-{compact_text}
-
-Return ONLY valid JSON with this schema:
-{{
-  "summary": "A detailed but concise explanation of what the section says and why it matters",
-  "purpose": "Why this section exists in the paper and what role it plays for the reader",
-  "conclusion": "A short closing takeaway that reinforces the main point of the section",
-  "key_points": ["A specific insight from the section", "A second specific insight from the section", "A third specific insight from the section"],
-  "important_terms": ["A technical or domain-specific term from the section"],
-  "student_note": "What the student should understand after reading this section"
-}}
-
-Rules:
-- Do not copy text from the paper.
-- Do not write generic explanations.
-- Make the explanation specific to this section only.
-- Include concrete details whenever the section mentions methods, architecture, datasets, experiments, metrics, findings, limitations, or conclusions.
-- For methodology sections, mention the approach, components, workflow, or design choice.
-- For results/discussion sections, mention observed outcomes, evidence, metrics, limitations, or comparison points if they appear in the text.
-- Keep the answer concise but substantive.
-- Return valid JSON only.
+- Identify ONLY sections that genuinely exist in the paper. Do not invent sections.
+- Use clear, short section titles (e.g., Abstract, Introduction, Related Work, Methodology, Results, Conclusion).
+- If the paper has no clear section headings, return a single section titled "Main Content".
+- Each explanation must be 100-150 words.
+- Each explanation must reference specific content from the paper (methods, datasets, results, claims, etc.).
+- Write in a professional academic tone suitable for a university student.
+- Do NOT include markdown, code fences, or any text outside the JSON object.
+- Return ONLY the JSON object, nothing else.
 """
 
 
 def get_section_detection_prompt(extracted_text):
+    """Build section detection prompt (legacy support for compatibility)."""
     return build_section_learning_prompt(extracted_text)
 
 
-def get_single_section_explanation_prompt(section_title, section_text):
-    return build_section_learning_prompt(section_title, section_text)
+def get_single_section_explanation_prompt(section_title, section_text, paper_context=None):
+    """Build single-section explanation prompt."""
+    return build_section_learning_prompt(section_text, paper_context=paper_context)

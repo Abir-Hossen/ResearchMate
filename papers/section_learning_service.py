@@ -7,7 +7,6 @@ from .ai_service import AIService
 from .models import PaperContent, PaperSection
 from .prompts.section_learning import build_section_learning_prompt
 from .response_validator import validate_json_response
-from .section_parser import parse_sections
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +215,32 @@ def _extract_section_excerpt(extracted_text, section_title):
     return _prepare_section_text(excerpt or extracted_text)
 
 
+def _extract_paper_context(extracted_text, max_chars=600):
+    """Extract a brief paper context for grounding section explanations."""
+    if not extracted_text:
+        return ''
+
+    text = re.sub(r'\s+', ' ', extracted_text).strip()
+    
+    abstract_match = re.search(r'abstract[:\s]+(.*?)(?:\n\n|\Z)', text, re.IGNORECASE | re.DOTALL)
+    if abstract_match:
+        abstract_text = abstract_match.group(1).strip()
+        if len(abstract_text) > max_chars:
+            abstract_text = abstract_text[:max_chars].rsplit(' ', 1)[0] + '...'
+        return abstract_text
+
+    intro_match = re.search(r'introduction[:\s]+(.*?)(?:\n\n|\Z)', text, re.IGNORECASE | re.DOTALL)
+    if intro_match:
+        intro_text = intro_match.group(1).strip()
+        if len(intro_text) > max_chars:
+            intro_text = intro_text[:max_chars].rsplit(' ', 1)[0] + '...'
+        return intro_text
+
+    if len(text) > max_chars:
+        return text[:max_chars].rsplit(' ', 1)[0] + '...'
+    return text
+
+
 def _persist_section_learning(paper, cleaned_sections):
     PaperSection.objects.filter(paper=paper).delete()
 
@@ -226,11 +251,11 @@ def _persist_section_learning(paper, cleaned_sections):
             section_order=item['order'],
             original_text=item.get('original_text', ''),
             summary=item['summary'],
-            purpose=item['purpose'],
+            purpose=item.get('purpose', ''),
             conclusion=item.get('conclusion', ''),
-            key_points=item['key_points'],
-            important_terms=item['important_terms'],
-            student_note=item['student_note'],
+            key_points=item.get('key_points', []),
+            important_terms=item.get('important_terms', []),
+            student_note=item.get('student_note', ''),
             is_generated=bool(item.get('summary') or item.get('purpose') or item.get('key_points') or item.get('important_terms') or item.get('student_note')),
         )
 
@@ -251,7 +276,12 @@ def _find_section_text(parsed_sections, section_title):
 
 
 def generate_section_learning(paper, force_refresh=False):
-    """Use a local parser first, then explain each detected section using compact section-level prompts."""
+    """
+    Generate section learning explanations using whole-paper AI analysis.
+    
+    Sends the full paper text to the AI in a single request. The AI identifies all
+    meaningful sections and generates a professional explanation for each.
+    """
     try:
         content = paper.content
     except ObjectDoesNotExist as exc:
@@ -264,107 +294,70 @@ def generate_section_learning(paper, force_refresh=False):
     if existing_sections and not force_refresh:
         return existing_sections
 
-    parsed_sections = parse_sections(content.extracted_text)
-    if not parsed_sections:
-        raise SectionLearningError('No sections could be detected from the paper text.')
-
+    # Single AI call: send whole paper text, get all sections + explanations
     ai_service = AIService()
-    detection_context = _build_detection_context(content.extracted_text)
-
+    
     try:
-        detection_response = ai_service.generate_feature('section_learning', detection_context, prompt_type='section_detection')
+        prompt = build_section_learning_prompt(content.extracted_text)
+        explanation_response = ai_service.generate_feature(
+            'section_learning',
+            content.extracted_text,
+            prompt_type='section_detection',
+        )
     except Exception as exc:
         error_text = str(exc).lower()
         if 'rate limit' in error_text or '429' in error_text or 'daily token limit' in error_text or 'tokens per day' in error_text:
             raise SectionLearningError('AI section generation is temporarily unavailable because the configured Groq account has reached its daily token limit (rate limit). Please try again later or use a different API key.') from exc
         raise SectionLearningError(f'AI section generation failed: {exc}') from exc
 
-    valid, detection_payload, detection_error = validate_json_response(detection_response)
-    detected_sections = []
-    if valid and isinstance(detection_payload, dict):
-        detected_sections = _clean_detection_payload(detection_payload)
+    valid_response, response_payload, response_error = validate_json_response(explanation_response)
+    
+    if not valid_response or not isinstance(response_payload, dict):
+        raise SectionLearningError(f'AI returned an invalid response: {response_error}')
+
+    raw_sections = response_payload.get('sections')
+    if not raw_sections:
+        raise SectionLearningError('AI response did not include any usable sections.')
 
     cleaned_sections = []
-    if detected_sections:
-        for index, detected_section in enumerate(detected_sections, start=1):
-            section_title = detected_section['title']
-            section_text = _find_section_text(parsed_sections, section_title) or content.extracted_text
-            summary = str(detected_section.get('summary') or '').strip()
-            purpose = str(detected_section.get('purpose') or '').strip()
-            conclusion = str(detected_section.get('conclusion') or '').strip()
-            key_points = _coerce_list(detected_section.get('key_points'))
-            important_terms = _coerce_list(detected_section.get('important_terms'))
-            student_note = str(detected_section.get('student_note') or '').strip()
+    for index, raw_section in enumerate(raw_sections, start=1):
+        if not isinstance(raw_section, dict):
+            continue
 
-            if not any([summary, purpose, key_points, important_terms, student_note]):
-                try:
-                    explanation_response = ai_service.generate_feature('section_learning', section_text, prompt_type='section_explanation', section_title=section_title)
-                except Exception as exc:
-                    error_text = str(exc).lower()
-                    if 'rate limit' in error_text or '429' in error_text or 'daily token limit' in error_text or 'tokens per day' in error_text:
-                        raise SectionLearningError('AI section generation is temporarily unavailable because the configured Groq account has reached its daily token limit (rate limit). Please try again later or use a different API key.') from exc
-                    raise SectionLearningError(f'AI section generation failed: {exc}') from exc
+        title = _extract_section_title(raw_section) or f'Section {index}'
+        explanation = str(raw_section.get('explanation') or '').strip()
+        
+        # If no explanation field, try common alternatives
+        if not explanation:
+            for key in ('summary', 'description', 'content', 'text', 'student_note', 'purpose'):
+                if raw_section.get(key):
+                    explanation = str(raw_section[key]).strip()
+                    break
 
-                valid_explanation, explanation_payload, explanation_error = validate_json_response(explanation_response)
-                if valid_explanation and isinstance(explanation_payload, dict):
-                    summary = str(explanation_payload.get('summary') or '').strip()
-                    purpose = str(explanation_payload.get('purpose') or '').strip()
-                    conclusion = str(explanation_payload.get('conclusion') or '').strip()
-                    key_points = _coerce_list(explanation_payload.get('key_points'))
-                    important_terms = _coerce_list(explanation_payload.get('important_terms'))
-                    student_note = str(explanation_payload.get('student_note') or '').strip()
-                else:
-                    summary = str(explanation_response or '').strip()
+        if not explanation:
+            continue
 
-            cleaned_sections.append({
-                'title': section_title,
-                'order': index,
-                'summary': summary,
-                'purpose': purpose,
-                'conclusion': conclusion,
-                'key_points': key_points,
-                'important_terms': important_terms,
-                'student_note': student_note,
-                'original_text': section_text,
-            })
-    else:
-        for index, parsed_section in enumerate(parsed_sections, start=1):
-            section_title = parsed_section['title']
-            section_text = parsed_section['text']
-            try:
-                explanation_response = ai_service.generate_feature('section_learning', section_text, prompt_type='section_explanation', section_title=section_title)
-            except Exception as exc:
-                error_text = str(exc).lower()
-                if 'rate limit' in error_text or '429' in error_text or 'daily token limit' in error_text or 'tokens per day' in error_text:
-                    raise SectionLearningError('AI section generation is temporarily unavailable because the configured Groq account has reached its daily token limit (rate limit). Please try again later or use a different API key.') from exc
-                raise SectionLearningError(f'AI section generation failed: {exc}') from exc
+        # Enforce 100-150 word range with tolerance
+        word_count = len(explanation.split())
+        if word_count > 160:
+            words = explanation.split()
+            explanation = ' '.join(words[:140]) + '...'
+        elif word_count < 90 and len(explanation) < 600:
+            explanation = explanation
 
-            valid_explanation, explanation_payload, explanation_error = validate_json_response(explanation_response)
-            if valid_explanation and isinstance(explanation_payload, dict):
-                summary = str(explanation_payload.get('summary') or '').strip()
-                purpose = str(explanation_payload.get('purpose') or '').strip()
-                conclusion = str(explanation_payload.get('conclusion') or '').strip()
-                key_points = _coerce_list(explanation_payload.get('key_points'))
-                important_terms = _coerce_list(explanation_payload.get('important_terms'))
-                student_note = str(explanation_payload.get('student_note') or '').strip()
-            else:
-                summary = str(explanation_response or '').strip()
-                purpose = ''
-                conclusion = ''
-                key_points = []
-                important_terms = []
-                student_note = ''
+        cleaned_sections.append({
+            'title': title,
+            'order': index,
+            'summary': explanation,
+            'purpose': '',
+            'conclusion': '',
+            'key_points': [],
+            'important_terms': [],
+            'student_note': '',
+            'original_text': '',
+        })
 
-            cleaned_sections.append({
-                'title': section_title,
-                'order': index,
-                'summary': summary,
-                'purpose': purpose,
-                'conclusion': conclusion,
-                'key_points': key_points,
-                'important_terms': important_terms,
-                'student_note': student_note,
-                'original_text': section_text,
-            })
+    if not cleaned_sections:
+        raise SectionLearningError('AI response did not include any usable section explanations.')
 
-    return _persist_section_learning(paper, sorted(cleaned_sections, key=lambda item: item['order']))
+    return _persist_section_learning(paper, cleaned_sections)

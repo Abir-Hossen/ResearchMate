@@ -2,52 +2,46 @@ from __future__ import annotations
 
 
 def build_beginner_prompt_text(extracted_text):
-    return f"""You are an experienced university professor teaching a student who has never read this paper before.
+    compact_text = extracted_text[:5500] if extracted_text else ''
+    
+    return f"""You are a university professor explaining a research paper to a beginner student.
 
-Act as a patient, clear tutor. Assume the student has little or no background knowledge. Teach the paper rather than summarize it.
+Assume the student has no background knowledge. Teach the paper clearly and progressively using ONLY the provided paper text. Do not use generic knowledge outside the paper.
 
-You must return structured data for a software application.
-Return ONLY valid JSON.
-Do NOT include markdown, code fences, explanations, introductory text, comments, or natural-language prose.
-Return ONLY one valid JSON object.
-
-Use this schema exactly:
+Return ONLY valid JSON with this schema:
 {{
-  "beginner_explanation": "string",
-  "technical_explanation": "string",
-  "key_contributions": ["string"],
-  "key_concepts": ["string"],
-  "reading_difficulty": {{"level": "string", "reason": "string"}},
-  "glossary": [{{"term": "string", "simple_explanation": "string", "technical_explanation": "string", "example": "string"}}],
-  "flashcards": [{{"question": "string", "answer": "string"}}],
-  "quiz_questions": [{{"question": "string", "option_a": "string", "option_b": "string", "option_c": "string", "option_d": "string", "correct_answer": "string", "explanation": "string"}}],
-  "viva_questions": [{{"question": "string", "suggested_answer": "string", "follow_up_question": "string"}}]
+  "beginner_explanation": "Paper-specific beginner-friendly explanation.",
+  "key_contributions": ["Contribution 1", "Contribution 2", "Contribution 3"],
+  "key_concepts": ["Concept 1", "Concept 2", "Concept 3"],
+  "reading_difficulty": {{"level": "Beginner/Intermediate/Advanced", "reason": "Brief reason"}}
 }}
 
-The value of "beginner_explanation" must be a long, educational, beginner-friendly explanation that follows this structure and order:
-1. Paper Overview
-2. Why This Research Matters
-3. Background Concepts
-4. Step-by-Step Explanation
-5. Important Technical Terms
-6. Real-World Analogy
-7. Practical Applications
-8. Advantages
-9. Limitations
-10. Key Takeaways
-11. Suggested Next Learning Topics
+Structure the beginner_explanation with these exact headings (600-800 words total):
+## What the Paper Is About
+[Based on the paper]
 
-Writing instructions for the beginner explanation:
-- Write 1800-2500 words when possible.
-- Use clear teaching language.
-- Explain ideas gradually.
-- Avoid assumptions about prior knowledge.
-- Use examples and analogies.
-- Make the explanation feel like a guided university lesson.
-- Do not write a short summary.
-- Do not include extra sections outside the requested structure.
-- Do not generate glossary, flashcards, quiz, viva, or technical explanation content in this response.
+## Why the Research Matters
+[Based on the paper]
+
+## Main Idea / Method
+[Based on the paper]
+
+## Key Findings or Contributions
+[Based on the paper]
+
+## Simple Explanation of the Core Concepts
+[Based on the paper]
+
+## Key Takeaway
+[Based on the paper]
+
+CRITICAL CONSTRAINTS:
+- Use ONLY the provided paper text. Do not add generic knowledge.
+- Keep language simple and clear
+- Do NOT generate technical explanation, glossary, flashcards, quiz questions, viva questions, or revision notes
 
 Paper text:
-{extracted_text[:12000]}
+{compact_text}
+
+Return ONLY the JSON object. No preamble, markdown, or code fences.
 """

@@ -29,7 +29,7 @@ class GroqLearningService:
 
         logger.info('Groq API key detected in environment (not displayed).')
 
-        self.model_name = getattr(settings, 'GROQ_MODEL', None) or os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+        self.model_name = getattr(settings, 'GROQ_MODEL', None) or os.environ.get('GROQ_MODEL', 'openai/gpt-oss-120b')
         logger.info('Using Groq model %s', self.model_name)
 
         try:

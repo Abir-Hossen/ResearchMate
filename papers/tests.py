@@ -3,7 +3,7 @@ import tempfile
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib import admin
 from django.contrib.auth.models import User
@@ -23,6 +23,39 @@ from .response_validator import validate_json_response
 from .services import _get_user_facing_error_message
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .quiz_service import QuizGenerationError, generate_quiz
+
+
+class GroqProviderTests(TestCase):
+    def test_groq_provider_requests_json_object_response(self):
+        from .ai_providers import GroqProvider
+
+        provider = GroqProvider.__new__(GroqProvider)
+        provider.model_name = 'openai/gpt-oss-120b'
+        provider.last_usage = None
+        provider.last_response_time = None
+        provider.last_error_details = None
+        provider.groq_module = SimpleNamespace()
+
+        mock_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"beginner_explanation":"works"}'))],
+            usage={'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15},
+        )
+
+        provider.client = SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=Mock(return_value=mock_response))
+            )
+        )
+
+        result = provider.generate('prompt text')
+
+        self.assertEqual(result, '{"beginner_explanation":"works"}')
+        provider.client.chat.completions.create.assert_called_once_with(
+            model='openai/gpt-oss-120b',
+            messages=[{'role': 'user', 'content': 'prompt text'}],
+            temperature=0.0,
+            max_completion_tokens=4000,
+        )
 
 
 class GroqConnectivityTests(TestCase):
@@ -224,8 +257,28 @@ class PaperUploadTests(TestCase):
 
         self.assertIn('Return ONLY valid JSON', prompt)
         self.assertIn('"beginner_explanation"', prompt)
-        self.assertIn('"technical_explanation"', prompt)
-        self.assertIn('"glossary"', prompt)
+        self.assertIn('"key_contributions"', prompt)
+        self.assertIn('"key_concepts"', prompt)
+        self.assertIn('"reading_difficulty"', prompt)
+        self.assertNotIn('"technical_explanation"', prompt)
+        self.assertNotIn('"glossary"', prompt)
+        self.assertNotIn('"flashcards"', prompt)
+        self.assertNotIn('"quiz_questions"', prompt)
+        self.assertNotIn('"viva_questions"', prompt)
+
+    def test_technical_prompt_requests_structured_markdown_sections(self):
+        long_text = ' '.join(['paper'] * 5000)
+        prompt = build_beginner_prompt(long_text)
+
+        self.assertIn('"beginner_explanation"', prompt)
+        self.assertNotIn('"technical_explanation"', prompt)
+        self.assertNotIn('"glossary"', prompt)
+        self.assertNotIn('"flashcards"', prompt)
+        self.assertNotIn('"quiz_questions"', prompt)
+        self.assertNotIn('"viva_questions"', prompt)
+        self.assertIn('600-800 words', prompt)
+        self.assertIn('Paper text:', prompt)
+        self.assertLess(len(prompt), 12000)
 
     def test_technical_prompt_requests_structured_markdown_sections(self):
         prompt = build_technical_prompt('A sample paper about neural networks.')
@@ -302,35 +355,27 @@ class PaperUploadTests(TestCase):
         self.assertNotContains(response, 'Run Start Learning to generate a technical explanation.')
 
     def test_section_learning_prompt_requests_section_json_schema(self):
-        prompt = build_section_learning_prompt('A sample paper about neural networks.')
+        prompt = build_section_learning_prompt('Abstract\nThis paper introduces X.\n\nIntroduction\nWe study Y.\n\nMethods\nWe use Z.\n\nResults\nWe found W.\n\nConclusion\nWe conclude V.')
 
         self.assertIn('"sections"', prompt)
         self.assertIn('"title"', prompt)
-        self.assertIn('"summary"', prompt)
-        self.assertIn('"purpose"', prompt)
-        self.assertIn('"key_points"', prompt)
-        self.assertIn('"important_terms"', prompt)
-        self.assertIn('"student_note"', prompt)
-        self.assertIn('Return ONLY valid JSON', prompt)
-        self.assertIn('every major section', prompt)
-        self.assertIn('Do not stop after Introduction or Related Work', prompt)
-        self.assertIn('cover the full paper', prompt)
+        self.assertIn('"explanation"', prompt)
+        self.assertIn('100-150 word', prompt)
+        self.assertIn('expert academic reading tutor', prompt)
+        self.assertNotIn('"summary"', prompt)
 
     def test_section_learning_prompt_compacts_large_section_text(self):
         long_text = ' '.join(['token'] * 4000)
 
-        prompt = build_section_learning_prompt('Methods', long_text)
+        prompt = build_section_learning_prompt(long_text)
 
-        self.assertIn('Section text:', prompt)
+        self.assertIn('Paper text:', prompt)
         self.assertIn('[truncated]', prompt)
         self.assertLess(len(prompt), 12000)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', side_effect=[
-        '{"sections":[{"title":"Conclusion","order":1}]}',
-        '{"summary":"A concise explanation","purpose":"It wraps up the main point","key_points":["The takeaway is clear"],"important_terms":["takeaway"],"student_note":"Remember the main message","conclusion":"This section closes the learning loop by reinforcing the core takeaway."}',
-    ])
-    def test_generate_section_learning_persists_conclusion(self, mock_generate):
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Conclusion","explanation":"A concise explanation of the conclusion section that wraps up the main point and reinforces the key takeaway from the paper."}]}')
+    def test_generate_section_learning_persists_explanation(self, mock_generate):
         user = User.objects.create_user(username='sectionconclusion', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Conclusion Paper', pdf_file=SimpleUploadedFile('section-conclusion.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(
@@ -344,7 +389,8 @@ class PaperUploadTests(TestCase):
         sections = generate_section_learning(paper)
 
         self.assertEqual(len(sections), 1)
-        self.assertEqual(sections[0].conclusion, 'This section closes the learning loop by reinforcing the core takeaway.')
+        self.assertEqual(sections[0].summary, 'A concise explanation of the conclusion section that wraps up the main point and reinforces the key takeaway from the paper.')
+        self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.section_learning_service.AIService.generate_feature')
@@ -356,20 +402,17 @@ class PaperUploadTests(TestCase):
             extracted_text='Introduction\nThis paper introduces the problem and the method.\n\nMethods\nThe system is implemented and tested on data.',
             extraction_status='Ready',
         )
-        mock_generate.side_effect = [
-            '{"sections":[{"title":"Introduction","order":1}]}',
-            '{"summary":"A concise explanation","purpose":"It introduces the work","key_points":["The problem is outlined"],"important_terms":["motivation"],"student_note":"Understand the motivation"}',
-        ]
+        mock_generate.return_value = '{"sections":[{"title":"Introduction","explanation":"A concise explanation."},{"title":"Methods","explanation":"Another explanation."}]}'
 
         from .section_learning_service import generate_section_learning
 
         generate_section_learning(paper)
 
-        explanation_call = mock_generate.call_args_list[1]
-        self.assertEqual(explanation_call.args[0], 'section_learning')
-        self.assertEqual(explanation_call.args[1], 'This paper introduces the problem and the method.')
-        self.assertEqual(explanation_call.kwargs['prompt_type'], 'section_explanation')
-        self.assertEqual(explanation_call.kwargs['section_title'], 'Introduction')
+        first_call = mock_generate.call_args_list[0]
+        self.assertEqual(first_call.args[0], 'section_learning')
+        # The whole paper text should be sent to the AI for section detection and explanation
+        self.assertIn('This paper introduces the problem and the method', first_call.args[1])
+        self.assertEqual(first_call.kwargs['prompt_type'], 'section_detection')
 
     def test_prepare_section_learning_text_compacts_large_input(self):
         from .section_learning_service import _prepare_section_text
@@ -387,19 +430,15 @@ class PaperUploadTests(TestCase):
         detection_prompt = get_section_detection_prompt('Paper introduction and methods section text.')
         section_prompt = get_single_section_explanation_prompt('Introduction', 'This section introduces the problem and outlines the approach.')
 
-        self.assertIn('Return ONLY valid JSON', detection_prompt)
         self.assertIn('"sections"', detection_prompt)
         self.assertIn('"title"', detection_prompt)
-        self.assertIn('summary', section_prompt)
-        self.assertIn('student_note', section_prompt)
+        self.assertIn('"explanation"', detection_prompt)
+        self.assertIn('100-150 word', detection_prompt)
+        self.assertIn('expert academic reading tutor', detection_prompt)
         self.assertNotIn('entire paper', detection_prompt.lower())
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.ai_providers.MockProvider.generate', side_effect=[
-        '{"sections":[{"heading":"Introduction","order":1},{"heading":"Methods","order":2}]}',
-        '{"summary":"This section introduces the topic and defines the problem clearly.","purpose":"It motivates the work and sets expectations for the reader.","key_points":["The problem is stated clearly.","The gap is explained.","The contribution is framed."],"important_terms":["problem setting","research gap","methodology"],"student_note":"Understand the motivation before reading the technical method."}',
-        '{"summary":"This section explains the implementation details and evaluation setup.","purpose":"It shows how the proposed system works and how it was tested.","key_points":["The algorithm is described.","The workflow is mapped out.","The evaluation choices are discussed."],"important_terms":["pipeline","evaluation","dataset"],"student_note":"Connect the method to the results because the evaluation depends on the design choices."}'
-    ])
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the research problem and motivates the approach."},{"title":"Methods","explanation":"This section describes the system implementation and evaluation setup."}]}')
     def test_generate_section_learning_accepts_plain_string_titles(self, mock_generate):
         user = User.objects.create_user(username='sectionstrings', password='Secret123')
         paper = Paper.objects.create(owner=user, title='String Titles Paper', pdf_file=SimpleUploadedFile('string-titles.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -416,13 +455,10 @@ class PaperUploadTests(TestCase):
         self.assertEqual(len(sections), 2)
         self.assertEqual(sections[0].title, 'Introduction')
         self.assertEqual(sections[1].title, 'Methods')
+        self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.ai_providers.MockProvider.generate', side_effect=[
-        '{"sections":[{"title":"Introduction","order":1},{"title":"Methods","order":2}]}',
-        '{"summary":"This section introduces the topic and defines the problem clearly.","purpose":"It motivates the work and sets expectations for the reader.","key_points":["The problem is stated clearly.","The gap is explained.","The contribution is framed."],"important_terms":["problem setting","research gap","methodology"],"student_note":"Understand the motivation before reading the technical method."}',
-        '{"summary":"This section explains the implementation details and evaluation setup.","purpose":"It shows how the proposed system works and how it was tested.","key_points":["The algorithm is described.","The workflow is mapped out.","The evaluation choices are discussed."],"important_terms":["pipeline","evaluation","dataset"],"student_note":"Connect the method to the results because the evaluation depends on the design choices."}'
-    ])
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the research problem and motivates the approach."},{"title":"Methods","explanation":"This section explains the implementation details and evaluation setup."}]}')
     def test_generate_section_learning_uses_detection_then_single_section_explanations(self, mock_generate):
         user = User.objects.create_user(username='sectionpipeline', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Pipeline Paper', pdf_file=SimpleUploadedFile('section-pipeline.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -437,12 +473,12 @@ class PaperUploadTests(TestCase):
         sections = generate_section_learning(paper)
 
         self.assertEqual(len(sections), 2)
-        self.assertEqual(mock_generate.call_count, 3)
+        self.assertEqual(mock_generate.call_count, 1)
         self.assertEqual(sections[0].title, 'Introduction')
         self.assertEqual(sections[1].title, 'Methods')
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","order":1,"summary":"A brief overview of the work.","purpose":"It introduces the paper at a high level.","key_points":["The problem is summarized."],"important_terms":["overview"],"student_note":"Understand the main claim first."},{"title":"Introduction","order":2,"summary":"The motivation and context are explained.","purpose":"It frames the problem and the study goal.","key_points":["The gap is stated."],"important_terms":["motivation"],"student_note":"Connect the motivation to the method."},{"title":"Methods","order":3,"summary":"The approach is explained clearly.","purpose":"It describes how the study was conducted.","key_points":["A workflow is outlined."],"important_terms":["methodology"],"student_note":"Follow the workflow carefully."},{"title":"Results","order":4,"summary":"The findings are summarized.","purpose":"It reports what the study found.","key_points":["The outcome is described."],"important_terms":["findings"],"student_note":"Compare the findings to the method."},{"title":"Conclusion","order":5,"summary":"The study is wrapped up.","purpose":"It reinforces the main takeaway.","key_points":["The main lesson is captured."],"important_terms":["takeaway"],"student_note":"Remember the final message."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"The motivation and context are explained."},{"title":"Methods","explanation":"The approach is explained clearly."},{"title":"Results","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
     def test_generate_section_learning_uses_extracted_headings_when_available(self, mock_generate):
         user = User.objects.create_user(username='sectionheadings', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Headings Paper', pdf_file=SimpleUploadedFile('section-headings.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -460,11 +496,11 @@ class PaperUploadTests(TestCase):
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","order":1,"summary":"This section introduces the research problem, explains the gap in prior systems, and motivates the proposed solution by emphasizing the practical constraints and limitations that motivate the study in a concrete way.","purpose":"It establishes why the problem matters, defines the context for the paper, and prepares the reader to understand the technical decisions that follow.","key_points":["The paper identifies a gap in current approaches.","The problem is framed around real-world limitations.","The study motivates a more robust technical design."],"important_terms":["research gap","problem setting","baseline systems"],"student_note":"Understand the motivation and the specific weakness the paper addresses before reading the design section, because the later method depends on this framing."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the research problem, explains the gap in prior systems, and motivates the proposed solution by emphasizing the practical constraints and limitations that motivate the study in a concrete way."}]}')
     def test_generate_section_learning_persists_and_reuses_database_value(self, mock_generate):
         user = User.objects.create_user(username='sectionuser', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Learning Paper', pdf_file=SimpleUploadedFile('section-learning.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
-        PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for section learning.', extraction_status='Ready')
+        PaperContent.objects.create(paper=paper, extracted_text='Introduction\nThis is a technical paper excerpt for section learning.', extraction_status='Ready')
 
         from .section_learning_service import generate_section_learning
 
@@ -472,7 +508,7 @@ class PaperUploadTests(TestCase):
         self.assertEqual(len(sections), 1)
         self.assertEqual(mock_generate.call_count, 1)
         self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 1)
-        self.assertEqual(PaperSection.objects.get(paper=paper, title='Introduction').section_order, 1)
+        self.assertIn('gap', PaperSection.objects.get(paper=paper).summary)
 
         sections_again = generate_section_learning(paper)
         self.assertEqual(len(sections_again), 1)
@@ -518,11 +554,11 @@ class PaperUploadTests(TestCase):
         self.assertContains(response, 'This section motivates the problem and explains why the work matters.')
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","order":1,"summary":"This section frames the research problem, shows why prior methods fall short, and motivates the proposed approach by highlighting the limitations of current systems and the practical need for a stronger technical solution.","purpose":"It sets the research context and explains why the work matters, preparing the reader to understand the design decisions that follow in the rest of the paper.","key_points":["The authors describe a gap in existing methods.","The practical limitations of current systems are emphasized.","The study motivates a more robust design."],"important_terms":["research gap","baseline systems","problem setting"],"student_note":"Understand the motivation and the exact weakness the paper addresses before reading the method, because the design choices depend directly on this framing."},{"title":"Methods","order":2,"summary":"The methods section explains the architecture, data flow, and training strategy used to implement the proposed system, connecting each design choice to the research objective and expected behavior.","purpose":"It shows how the proposed solution is operationalized and why the chosen components, assumptions, and procedures are necessary to achieve the stated goal.","key_points":["The method defines the core architecture and pipeline.","Design decisions are tied to the problem statement.","The section explains how the contribution is implemented in practice."],"important_terms":["architecture","training pipeline","objective function"],"student_note":"Focus on how the architecture addresses the problem and which components are essential, since the later results are interpreted through this design."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section frames the research problem and motivates the study."},{"title":"Methods","explanation":"This section explains the architecture and evaluation setup."}]}')
     def test_generate_section_learning_force_refresh_replaces_outdated_sections(self, mock_generate):
         user = User.objects.create_user(username='sectionrefresh', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Refresh Paper', pdf_file=SimpleUploadedFile('section-refresh.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
-        PaperContent.objects.create(paper=paper, extracted_text='This paper includes an introduction and a methods section with technical details.', extraction_status='Ready')
+        PaperContent.objects.create(paper=paper, extracted_text='Introduction\nThis paper includes an introduction and a methods section with technical details.\n\nMethods\nThe methods section explains the architecture.', extraction_status='Ready')
         PaperSection.objects.create(
             paper=paper,
             title='Introduction',
@@ -541,6 +577,140 @@ class PaperUploadTests(TestCase):
         self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 2)
         self.assertEqual(mock_generate.call_count, 1)
         self.assertTrue(any(section.title == 'Methods' for section in sections))
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the problem and motivation."},{"title":"Methods","explanation":"This section describes the methodology and experimental approach."},{"title":"Results","explanation":"A single results section explaining the experimental outcomes and key metrics reported in the paper."}]}')
+    def test_generate_section_learning_deduplicates_repeated_sections(self, mock_generate):
+        """Test that duplicate section headings are deduplicated (only first occurrence used)."""
+        user = User.objects.create_user(username='sectiondedup', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Dedup Test Paper', pdf_file=SimpleUploadedFile('dedup.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        # Text with "Results" appearing twice
+        text_with_duplicates = '''
+Introduction
+The problem statement and motivation.
+
+Methods
+The proposed approach and technical details.
+
+Results
+First set of results and findings.
+
+Results
+Additional results in a separate section.
+        '''
+        PaperContent.objects.create(paper=paper, extracted_text=text_with_duplicates, extraction_status='Ready')
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+        # Should have only 3 unique sections (Introduction, Methods, Results once)
+        self.assertEqual(len(sections), 3)
+        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 3)
+        # Should only generate 1 AI request (whole paper analysis)
+        self.assertEqual(mock_generate.call_count, 1)
+        # Verify section titles are unique
+        section_titles = [s.title for s in sections]
+        self.assertEqual(len(section_titles), len(set(title.lower() for title in section_titles)))
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"This section provides a brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Related Work","explanation":"This section reviews related work and identifies the research gap."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results","explanation":"This section presents the experimental results and findings."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."},{"title":"Limitations","explanation":"This section discusses the limitations of the current approach."}]}')
+    def test_generate_section_learning_detects_standard_paper_sections(self, mock_generate):
+        user = User.objects.create_user(username='sectionstandard', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Standard Sections Paper', pdf_file=SimpleUploadedFile('standard.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='Abstract\nThis is the abstract.\n\nIntroduction\nThis is the introduction.\n\nRelated Work\nThis is related work.\n\nMethodology\nThis is methodology.\n\nResults\nThese are results.\n\nConclusion\nThis is conclusion.\n\nLimitations\nThese are limitations.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 7)
+        self.assertEqual([s.title for s in sections], ['Abstract', 'Introduction', 'Related Work', 'Methodology', 'Results', 'Conclusion', 'Limitations'])
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results","explanation":"This section presents the experimental results and findings."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
+    def test_generate_section_learning_detects_numbered_headings(self, mock_generate):
+        user = User.objects.create_user(username='sectionnumbered', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Numbered Sections Paper', pdf_file=SimpleUploadedFile('numbered.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='1. Introduction\nThis is the introduction.\n\n2. Methodology\nThis is methodology.\n\n3. Results\nThese are results.\n\n4. Conclusion\nThis is conclusion.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 4)
+        self.assertEqual([s.title for s in sections], ['Introduction', 'Methodology', 'Results', 'Conclusion'])
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Results","explanation":"A single results section explaining the experimental outcomes and key metrics reported in the paper."}]}')
+    def test_generate_section_learning_normalizes_duplicate_heading_patterns(self, mock_generate):
+        user = User.objects.create_user(username='sectionnormalize', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Normalize Sections Paper', pdf_file=SimpleUploadedFile('normalize.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='4 Results\nFirst set of results and findings.\n\nResults\nAdditional results in a separate section.\n\nRESULTS\nFinal results summary.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 1)
+        self.assertEqual(sections[0].title, 'Results')
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Main Content","explanation":"This paper discusses a machine learning approach for image classification using convolutional neural networks and evaluates it on standard benchmarks."}]}')
+    def test_generate_section_learning_fallback_main_content_when_no_headings(self, mock_generate):
+        user = User.objects.create_user(username='sectionmaincontent', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='No Headings Paper', pdf_file=SimpleUploadedFile('noheadings.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='This is just plain text without any recognizable section headings. It discusses machine learning and image classification.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 1)
+        self.assertEqual(sections[0].title, 'Main Content')
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Methodology","explanation":"This section describes the methodology and experimental approach in detail."},{"title":"Results","explanation":"This section presents the results."}]}')
+    def test_generate_section_learning_truncates_long_section_text(self, mock_generate):
+        user = User.objects.create_user(username='sectiontruncate', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Truncate Paper', pdf_file=SimpleUploadedFile('truncate.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        long_text = 'Methodology\n' + ('word ' * 2000) + '\n\nResults\nsome results'
+        PaperContent.objects.create(paper=paper, extracted_text=long_text, extraction_status='Ready')
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 2)
+        self.assertEqual(sections[0].title, 'Methodology')
+        self.assertEqual(mock_generate.call_count, 1)
+        # Verify the whole paper text was sent to the AI
+        sent_text = mock_generate.call_args.args[1]
+        self.assertIn('word word word', sent_text)
+        # The prompt builder compacts the text, so verify the prompt length is bounded
+        from papers.prompts.section_learning import build_section_learning_prompt
+        prompt = build_section_learning_prompt(sent_text)
+        self.assertLessEqual(len(prompt), 12000)
+        self.assertIn('[truncated]', prompt)
 
     def test_glossary_prompt_requests_paper_specific_markdown_output(self):
         prompt = build_glossary_prompt('A paper about convolutional networks and transformers.')
@@ -640,7 +810,7 @@ class PaperUploadTests(TestCase):
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
-        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"' + ('Easy' if index <= 4 else 'Medium' if index <= 8 else 'Hard') + '","explanation":"Explanation ' + str(index) + '"}'
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"' + ('Easy' if index <= 3 else 'Medium' if index <= 7 else 'Hard') + '","explanation":"Explanation ' + str(index) + '"}'
         for index in range(1, 11)
     ]) + ']}')
     def test_generate_quiz_persists_questions_and_reuses_database_value(self, mock_generate_feature):
@@ -654,6 +824,7 @@ class PaperUploadTests(TestCase):
         self.assertEqual(QuizQuestion.objects.filter(paper=paper).count(), 10)
         self.assertEqual(mock_generate_feature.call_count, 1)
         self.assertEqual(questions[0].difficulty, 'Easy')
+        mock_generate_feature.assert_called_once_with('quiz', 'This paper studies a novel method and reports results from a detailed experiment.', max_completion_tokens=2500)
 
         questions_again = generate_quiz(paper)
         self.assertEqual(len(questions_again), 10)
@@ -678,8 +849,210 @@ class PaperUploadTests(TestCase):
         self.assertNotContains(response, 'checked')
 
     @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate', return_value='not valid json')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='not valid json')
+    def test_generate_quiz_raises_on_malformed_json(self, mock_generate_feature, mock_provider_generate):
+        user = User.objects.create_user(username='quizmalformed', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Malformed Paper', pdf_file=SimpleUploadedFile('quiz-malformed.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        with self.assertRaises(QuizGenerationError) as exc:
+            generate_quiz(paper)
+
+        self.assertIn('invalid quiz response', str(exc.exception).lower())
+        self.assertEqual(mock_generate_feature.call_count, 1)
+        self.assertEqual(mock_provider_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate', return_value='{"quiz_questions":[]}')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[]}')
+    def test_generate_quiz_raises_on_empty_quiz_list(self, mock_generate_feature, mock_provider_generate):
+        user = User.objects.create_user(username='quizempty', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Empty Paper', pdf_file=SimpleUploadedFile('quiz-empty.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        with self.assertRaises(QuizGenerationError) as exc:
+            generate_quiz(paper)
+
+        self.assertIn('incomplete quiz response', str(exc.exception).lower())
+        self.assertEqual(mock_generate_feature.call_count, 1)
+        self.assertEqual(mock_provider_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+        for index in range(1, 4)
+    ]) + ']}')
     @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
-        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"' + ('Easy' if index <= 4 else 'Medium' if index <= 8 else 'Hard') + '","explanation":"Explanation ' + str(index) + '"}'
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+        for index in range(1, 4)
+    ]) + ']}')
+    def test_generate_quiz_raises_on_fewer_than_five_questions(self, mock_generate_feature, mock_provider_generate):
+        user = User.objects.create_user(username='quizfew', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Few Paper', pdf_file=SimpleUploadedFile('quiz-few.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        with self.assertRaises(QuizGenerationError) as exc:
+            generate_quiz(paper)
+
+        self.assertIn('incomplete quiz response', str(exc.exception).lower())
+        self.assertEqual(mock_generate_feature.call_count, 1)
+        self.assertEqual(mock_provider_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+        for index in range(1, 13)
+    ]) + ']}')
+    def test_generate_quiz_truncates_more_than_ten_questions(self, mock_generate_feature):
+        user = User.objects.create_user(username='quizmany', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Many Paper', pdf_file=SimpleUploadedFile('quiz-many.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        questions = generate_quiz(paper)
+
+        self.assertEqual(len(questions), 10)
+        self.assertEqual(QuizQuestion.objects.filter(paper=paper).count(), 10)
+        self.assertEqual(mock_generate_feature.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":"Z","difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+        for index in range(1, 6)
+    ]) + ']}')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":"Z","difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+        for index in range(1, 6)
+    ]) + ']}')
+    def test_generate_quiz_raises_on_invalid_correct_answer(self, mock_generate_feature, mock_provider_generate):
+        user = User.objects.create_user(username='quizwrongans', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Wrong Ans Paper', pdf_file=SimpleUploadedFile('quiz-wrongans.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        with self.assertRaises(QuizGenerationError) as exc:
+            generate_quiz(paper)
+
+        self.assertIn('incomplete quiz response', str(exc.exception).lower())
+        self.assertEqual(mock_generate_feature.call_count, 1)
+        self.assertEqual(mock_provider_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Duplicate question","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 1"}',
+        '{"question":"Duplicate question","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 2"}',
+        '{"question":"Unique question 1","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 3"}',
+        '{"question":"Unique question 2","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 4"}',
+        '{"question":"Unique question 3","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 5"}',
+    ]) + ']}')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Duplicate question","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 1"}',
+        '{"question":"Duplicate question","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 2"}',
+        '{"question":"Unique question 1","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 3"}',
+        '{"question":"Unique question 2","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 4"}',
+        '{"question":"Unique question 3","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"Easy","explanation":"Explanation 5"}',
+    ]) + ']}')
+    def test_generate_quiz_rejects_duplicate_questions(self, mock_generate_feature, mock_provider_generate):
+        user = User.objects.create_user(username='quizdup', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Dup Paper', pdf_file=SimpleUploadedFile('quiz-dup.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        with self.assertRaises(QuizGenerationError) as exc:
+            generate_quiz(paper)
+
+        self.assertIn('incomplete quiz response', str(exc.exception).lower())
+        self.assertEqual(QuizQuestion.objects.filter(paper=paper).count(), 0)
+        self.assertEqual(mock_generate_feature.call_count, 1)
+        self.assertEqual(mock_provider_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.quiz_service.AIService.generate_feature', side_effect=Exception('Error code: 429 - {"error": {"message": "Rate limit reached for model."}}'))
+    def test_generate_quiz_handles_rate_limit_gracefully(self, mock_generate_feature):
+        user = User.objects.create_user(username='quizratelimit', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Rate Limit Paper', pdf_file=SimpleUploadedFile('quiz-ratelimit.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        with self.assertRaises(QuizGenerationError) as exc:
+            generate_quiz(paper)
+
+        self.assertIn('usage limit', str(exc.exception).lower())
+        self.assertIn('try again later', str(exc.exception).lower())
+
+    def test_generate_quiz_truncates_long_paper_text(self):
+        from .quiz_service import _prepare_quiz_text
+
+        long_text = 'word ' * 2000
+        prepared = _prepare_quiz_text(long_text)
+
+        self.assertLessEqual(len(prepared), 5000)
+        self.assertIn('[truncated]', prepared)
+
+    def test_generate_quiz_keeps_short_paper_text_intact(self):
+        from .quiz_service import _prepare_quiz_text
+
+        short_text = 'This is a short paper text about a novel method.'
+        prepared = _prepare_quiz_text(short_text)
+
+        self.assertEqual(prepared, short_text)
+        self.assertNotIn('[truncated]', prepared)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.quiz_service.AIService.generate_feature', side_effect=[
+        '{"quiz_questions":[' + ','.join([
+            '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":"' + str(index) + '","difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+            for index in range(1, 4)
+        ]) + ']}',
+        '{"quiz_questions":[' + ','.join([
+            '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":"' + str((index - 1) % 4 + 1) + '","difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+            for index in range(1, 11)
+        ]) + ']}',
+    ])
+    def test_generate_quiz_retries_on_fewer_than_ten_questions(self, mock_generate_feature):
+        user = User.objects.create_user(username='quizretry', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz Retry Paper', pdf_file=SimpleUploadedFile('quiz-retry.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        mock_provider = Mock()
+        mock_provider.generate = Mock(return_value='{"quiz_questions":[' + ','.join([
+            '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":"' + str((index - 1) % 4 + 1) + '","difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+            for index in range(1, 11)
+        ]) + ']}')
+
+        with patch('papers.quiz_service.ProviderFactory.create_provider', return_value=mock_provider):
+            questions = generate_quiz(paper)
+
+        self.assertEqual(len(questions), 10)
+        self.assertEqual(QuizQuestion.objects.filter(paper=paper).count(), 10)
+        self.assertEqual(mock_generate_feature.call_count, 1)
+        self.assertEqual(mock_provider.generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":"' + str((index - 1) % 4 + 1) + '","difficulty":"Easy","explanation":"Explanation ' + str(index) + '"}'
+        for index in range(1, 11)
+    ]) + ']}')
+    def test_generate_quiz_accepts_string_number_correct_answer(self, mock_generate_feature):
+        user = User.objects.create_user(username='quizstrnum', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Quiz StrNum Paper', pdf_file=SimpleUploadedFile('quiz-strnum.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='This paper studies a method and reports results.', extraction_status='Ready')
+
+        questions = generate_quiz(paper)
+
+        self.assertEqual(len(questions), 10)
+        self.assertEqual(QuizQuestion.objects.filter(paper=paper).count(), 10)
+        self.assertEqual(mock_generate_feature.call_count, 1)
+        self.assertEqual(questions[0].correct_answer, 'Option A')
+        self.assertEqual(questions[1].correct_answer, 'Option B')
+        self.assertEqual(questions[2].correct_answer, 'Option C')
+        self.assertEqual(questions[3].correct_answer, 'Option D')
+        self.assertEqual(questions[4].correct_answer, 'Option A')
+        self.assertEqual(questions[2].correct_answer, 'Option C')
+        self.assertEqual(questions[3].correct_answer, 'Option D')
+        self.assertEqual(questions[2].correct_answer, 'Option C')
+        self.assertEqual(questions[3].correct_answer, 'Option D')
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.quiz_service.AIService.generate_feature', return_value='{"quiz_questions":[' + ','.join([
+        '{"question":"Question ' + str(index) + '","options":["Option A","Option B","Option C","Option D"],"correct_answer":1,"difficulty":"' + ('Easy' if index <= 3 else 'Medium' if index <= 7 else 'Hard') + '","explanation":"Explanation ' + str(index) + '"}'
         for index in range(1, 11)
     ]) + ']}')
     def test_quiz_page_shows_generate_button_and_can_generate_quiz(self, mock_generate_feature):
@@ -696,6 +1069,7 @@ class PaperUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Quiz generated successfully.')
         self.assertTrue(QuizQuestion.objects.filter(paper=paper).exists())
+        self.assertEqual(QuizQuestion.objects.filter(paper=paper).count(), 10)
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.flashcard_service.AIService.generate_feature', return_value='{"flashcards":[{"question":"What is the research goal?","answer":"The paper focuses on a specific task described in the introduction.","paper_context":"The introduction defines the main objective and explains why the task is important.","importance":["Frames the study","Connects methods to results"],"category":"Research Problem","difficulty":"Easy"}]}')
@@ -944,7 +1318,7 @@ class PaperUploadTests(TestCase):
         PaperContent.objects.create(paper=paper, extracted_text='Paper content for regeneration', extraction_status='Ready')
         analysis = AIAnalysis.objects.create(paper=paper, analysis_status='Failed', analysis_error='old error', raw_response='stale response')
 
-        def fake_generate(prompt):
+        def fake_generate(prompt, max_completion_tokens=None):
             refreshed = AIAnalysis.objects.get(pk=analysis.pk)
             self.assertEqual(refreshed.analysis_status, 'Processing')
             self.assertEqual(refreshed.analysis_error, '')

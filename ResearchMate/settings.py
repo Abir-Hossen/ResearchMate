@@ -21,7 +21,7 @@ import os
 def refresh_settings_from_env():
     global GROQ_API_KEY, GROQ_MODEL, AI_PROVIDER
     GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-    GROQ_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+    GROQ_MODEL = os.environ.get('GROQ_MODEL', 'openai/gpt-oss-120b')
     AI_PROVIDER = os.getenv('AI_PROVIDER', 'groq')
 
 

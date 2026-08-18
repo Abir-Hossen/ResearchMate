@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 
 HEADING_KEYWORDS = (
@@ -22,45 +22,57 @@ HEADING_KEYWORDS = (
     'limitations',
     'conclusion',
     'future work',
-    'references',
-    'bibliography',
-    'acknowledgements',
-    'appendix',
 )
 
 STOP_HEADINGS = {'references', 'bibliography', 'acknowledgements', 'appendix'}
+
+KNOWN_HEADING_MAP = {
+    'abstract': 'Abstract',
+    'introduction': 'Introduction',
+    'related work': 'Related Work',
+    'background': 'Background',
+    'literature review': 'Literature Review',
+    'methodology': 'Methodology',
+    'methods': 'Methods',
+    'materials and methods': 'Materials and Methods',
+    'system architecture': 'System Architecture',
+    'proposed method': 'Proposed Method',
+    'implementation': 'Implementation',
+    'dataset': 'Dataset',
+    'experimental setup': 'Experimental Setup',
+    'experiments': 'Experiments',
+    'results': 'Results',
+    'discussion': 'Discussion',
+    'limitations': 'Limitations',
+    'conclusion': 'Conclusion',
+    'future work': 'Future Work',
+}
 
 
 def _normalize_text(text: str) -> str:
     return re.sub(r'\s+', ' ', (text or '').strip())
 
 
-def _looks_like_heading(line: str) -> bool:
-    text = re.sub(r'\s+', ' ', line or '').strip()
-    if not text:
-        return False
-
-    lowered = text.lower()
-    if lowered in STOP_HEADINGS:
-        return True
-
-    if any(lowered == keyword or lowered.startswith(keyword + ':') or lowered.startswith(keyword + ' ') for keyword in HEADING_KEYWORDS):
-        return True
-
-    if re.match(r'^(#{1,6}|\d+(?:\.\d+)*[\.):-]\s*)', text):
-        return True
-
-    if re.match(r'^(?:[A-Z][A-Za-z0-9/&()\-]{2,80}|[A-Z][A-Za-z0-9/&()\-]{2,80}(?:\s+[A-Z][A-Za-z0-9/&()\-]{2,80}){0,4})\s*[:.]$', text):
-        return True
-
-    if len(text.split()) <= 6 and text.endswith(':'):
-        return True
-
-    return False
+def _normalize_heading_title(raw_title: str) -> str:
+    title = _normalize_text(raw_title)
+    title = re.sub(r'^#{1,6}\s*', '', title)
+    title = re.sub(r'^(?:section\s*)?(?:[ivxlcdm]+\.|[a-z]\.)?\s*', '', title, flags=re.IGNORECASE)
+    title = re.sub(r'^\d+(?:\.\d+)*[\.):-]\s*', '', title)
+    title = title.strip().rstrip(':').strip()
+    if not title:
+        return raw_title.strip()
+    lowered = title.lower()
+    if lowered in KNOWN_HEADING_MAP:
+        return KNOWN_HEADING_MAP[lowered]
+    if lowered.startswith(tuple(k + ' ' for k in KNOWN_HEADING_MAP)):
+        for key, value in KNOWN_HEADING_MAP.items():
+            if lowered == key or lowered.startswith(key + ' '):
+                return value
+    return title if title else raw_title.strip()
 
 
-def _split_heading_and_body(line: str) -> tuple[str | None, str | None]:
-    text = re.sub(r'\s+', ' ', line or '').strip()
+def _split_heading_and_body(line: str) -> Tuple[str | None, str | None]:
+    text = _normalize_text(line)
     if not text:
         return None, None
 
@@ -68,24 +80,21 @@ def _split_heading_and_body(line: str) -> tuple[str | None, str | None]:
     if lowered in STOP_HEADINGS:
         return lowered, None
 
-    if any(lowered == keyword or lowered.startswith(keyword + ':') or lowered.startswith(keyword + ' ') or lowered.startswith(keyword + '.') for keyword in HEADING_KEYWORDS):
-        match = re.match(r'^(#{1,6}\s*)?(?P<title>[A-Za-z][A-Za-z0-9/&()\-]{1,80})(?P<delimiter>\s*[:.-]\s*)(?P<body>.*)$', text)
+    for keyword in HEADING_KEYWORDS:
+        if lowered == keyword:
+            return text, None
+        pattern = re.compile(r'^' + re.escape(keyword) + r'([\s:\-–—\.]+)(.*)$', re.IGNORECASE)
+        match = pattern.match(text)
         if match:
-            title = match.group('title').strip().rstrip(':')
-            body = match.group('body').strip()
+            title = keyword
+            body = match.group(2).strip()
             return title, body or None
-
-        for keyword in HEADING_KEYWORDS:
-            if lowered == keyword or lowered.startswith(keyword + ':') or lowered.startswith(keyword + ' ') or lowered.startswith(keyword + '.'):
-                title = text.split('.', 1)[0].split(':', 1)[0].split(' ', 1)[0]
-                if title:
-                    return title, None
 
     return None, None
 
 
 def parse_sections(extracted_text: str) -> List[Dict[str, str]]:
-    """Split academic paper text into section blocks using local heuristics."""
+    """Split academic paper text into section blocks using strict local heuristics."""
     if not extracted_text or not extracted_text.strip():
         return []
 
@@ -93,14 +102,19 @@ def parse_sections(extracted_text: str) -> List[Dict[str, str]]:
     sections: List[Dict[str, str]] = []
     current_title = None
     current_lines: List[str] = []
+    seen_titles: set = set()
 
     def flush_section(title: str | None, lines_list: List[str]) -> None:
         if not title:
             return
+        normalized = _normalize_heading_title(title)
+        if normalized.lower() in seen_titles:
+            return
+        seen_titles.add(normalized.lower())
         text = '\n'.join(line.strip() for line in lines_list if line.strip())
         if not text.strip():
             return
-        sections.append({'title': title, 'text': text.strip()})
+        sections.append({'title': normalized, 'text': text.strip(), 'order': len(sections) + 1})
 
     for raw_line in lines:
         line = raw_line.strip()
@@ -111,19 +125,19 @@ def parse_sections(extracted_text: str) -> List[Dict[str, str]]:
 
         heading_title, body = _split_heading_and_body(line)
         if heading_title is not None:
+            normalized_heading = _normalize_heading_title(heading_title)
+            if normalized_heading.lower() in STOP_HEADINGS:
+                if current_title is not None:
+                    flush_section(current_title, current_lines)
+                    current_title = None
+                    current_lines = []
+                break
+
             if current_title is not None:
                 flush_section(current_title, current_lines)
                 current_lines = []
 
-            cleaned_title = heading_title
-            if cleaned_title.startswith('#'):
-                cleaned_title = re.sub(r'^#{1,6}\s*', '', cleaned_title)
-            cleaned_title = cleaned_title.strip().rstrip(':')
-
-            if cleaned_title.lower() in STOP_HEADINGS:
-                break
-
-            current_title = cleaned_title or 'Section'
+            current_title = normalized_heading
             if body:
                 current_lines.append(body)
             continue
@@ -137,6 +151,9 @@ def parse_sections(extracted_text: str) -> List[Dict[str, str]]:
         flush_section(current_title, current_lines)
 
     if not sections:
-        return [{'title': 'Main Content', 'text': _normalize_text(extracted_text)}]
+        return [{'title': 'Main Content', 'text': _normalize_text(extracted_text), 'order': 1}]
+
+    for index, section in enumerate(sections, start=1):
+        section['order'] = index
 
     return sections

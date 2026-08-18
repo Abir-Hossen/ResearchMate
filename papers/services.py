@@ -320,7 +320,7 @@ def process_mock_ai(paper):
     try:
         logger.info('[Step 6] Paper=%s sending request to provider', paper.id)
         start_time = time.perf_counter()
-        raw_response = ai_service.generate_feature('beginner', content.extracted_text)
+        raw_response = ai_service.generate_feature('beginner', content.extracted_text, max_completion_tokens=1500)
         response_time = time.perf_counter() - start_time
         token_usage = provider.get_usage_summary(getattr(provider, 'last_usage', None)) if provider is not None and hasattr(provider, 'get_usage_summary') else None
         logger.info('[Step 6] Paper=%s response received (length=%s)', paper.id, len(raw_response or ''))

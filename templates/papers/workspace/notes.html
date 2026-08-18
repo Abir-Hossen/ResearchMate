@@ -2,19 +2,12 @@
 {% load papers_extras %}
 
 {% block workspace_content %}
-<div class="card border-0 shadow-sm">
-    <div class="card-body p-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <div>
-                <h4 class="h5 mb-1">Revision Notes</h4>
-                <p class="text-muted mb-0">A concise study sheet for quick revision before an exam or thesis defense.</p>
-            </div>
-            {% if not revision_notes %}
-                <form method="post">
-                    {% csrf_token %}
-                    <button class="btn btn-primary" type="submit">Generate Revision Notes</button>
-                </form>
-            {% endif %}
+<div class="card border-0 shadow-sm notes-shell">
+    <div class="card-body p-4 p-lg-5">
+        <div class="mb-4">
+            <p class="text-uppercase text-muted fw-semibold mb-2 letter-space">Revision Notes</p>
+            <h4 class="display-6 fw-bold mb-3">Revision Notes</h4>
+            <p class="lead text-muted mb-0">A concise study sheet highlighting the problem, methods, dataset, results, and key takeaways from the paper.</p>
         </div>
 
         {% if messages %}
@@ -24,14 +17,80 @@
         {% endif %}
 
         {% if revision_notes %}
-            <div class="border rounded p-3 bg-light">
+            <article class="notes-article">
                 {{ revision_notes|render_beginner_markdown|safe }}
-            </div>
+            </article>
         {% else %}
-            <div class="alert alert-light border" role="status">
-                No revision notes have been generated yet.
+            <div class="empty-state rounded-4 p-4 p-lg-5">
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary btn-lg">Generate Revision Notes</button>
+                </form>
             </div>
         {% endif %}
     </div>
 </div>
+
+<style>
+.notes-shell {
+    border-radius: 1.25rem;
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.notes-article {
+    max-width: 860px;
+    color: #17324d;
+    font-size: 1.02rem;
+    line-height: 1.75;
+}
+
+.notes-article h2 {
+    margin-top: 1.75rem;
+    margin-bottom: 0.85rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0d3b66;
+    border-bottom: 2px solid #dbeafe;
+    padding-bottom: 0.35rem;
+}
+
+.notes-article h2:first-child {
+    margin-top: 0;
+}
+
+.notes-article p {
+    margin-bottom: 0.85rem;
+}
+
+.notes-article ul,
+.notes-article ol {
+    padding-left: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.notes-article .section-list {
+    padding-left: 1.4rem;
+}
+
+.notes-article .section-list li {
+    margin-bottom: 0.6rem;
+}
+
+.notes-article .section-title {
+    background: linear-gradient(90deg, #eff6ff 0%, #f8fbff 100%);
+    padding: 0.6rem 0.8rem;
+    border-radius: 0.6rem;
+    box-shadow: inset 0 0 0 1px #dbeafe;
+}
+
+.notes-article strong {
+    color: #0f4c81;
+    font-weight: 700;
+}
+
+.empty-state {
+    border: 1px dashed #cbd5e1;
+    background: #fbfdff;
+}
+</style>
 {% endblock %}
