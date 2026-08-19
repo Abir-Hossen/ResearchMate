@@ -14,7 +14,7 @@ from .forms import LoginForm, PasswordChangeForm, RegistrationForm
 def home_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
-    return redirect('login')
+    return render(request, 'landing.html')
 
 
 def register_view(request):

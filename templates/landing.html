@@ -1,0 +1,399 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .landing-hero {
+        background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+        padding: 5rem 0 4rem;
+    }
+    .landing-hero h1 {
+        font-size: clamp(2rem, 4vw, 3rem);
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -0.03em;
+    }
+    .landing-hero p {
+        font-size: clamp(1rem, 1.8vw, 1.2rem);
+        color: #5f6b7a;
+        max-width: 640px;
+        margin: 0 auto;
+    }
+    .section-title {
+        font-size: clamp(1.5rem, 3vw, 2rem);
+        font-weight: 700;
+        color: #0f172a;
+        letter-spacing: -0.02em;
+    }
+    .section-subtitle {
+        color: #5f6b7a;
+        font-size: 1.05rem;
+    }
+    .step-circle {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: var(--research-primary);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.25rem;
+        margin: 0 auto 1rem;
+    }
+    .feature-card {
+        border: 1px solid var(--research-border);
+        border-radius: 1rem;
+        background: #fff;
+        padding: 1.5rem;
+        height: 100%;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .feature-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+    .feature-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 0.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .pricing-card {
+        border: 1px solid var(--research-border);
+        border-radius: 1.1rem;
+        background: #fff;
+        padding: 2rem;
+        height: 100%;
+        position: relative;
+    }
+    .pricing-card.popular {
+        border-color: var(--research-primary);
+        box-shadow: 0 12px 32px rgba(31, 100, 216, 0.1);
+    }
+    .popular-badge {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--research-primary);
+        color: #fff;
+        padding: 0.35rem 1rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+    .benefit-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .benefit-check {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--research-success-soft);
+        color: var(--research-success);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+    .cta-section {
+        background: linear-gradient(180deg, #ffffff 0%, #f3f7fb 100%);
+        padding: 4rem 0;
+    }
+    .landing-footer {
+        background: #0f172a;
+        color: #94a3b8;
+        padding: 3rem 0 2rem;
+    }
+    .landing-footer a {
+        color: #e2e8f0;
+        text-decoration: none;
+    }
+    .landing-footer a:hover {
+        color: #fff;
+    }
+    .access-badge {
+        display: inline-block;
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .access-free {
+        background: var(--research-success-soft);
+        color: var(--research-success);
+    }
+    .access-premium {
+        background: var(--research-warning-soft);
+        color: var(--research-warning);
+    }
+</style>
+
+<!-- Hero -->
+<section class="landing-hero text-center">
+    <div class="container">
+        <h1 class="mb-3">Understand Research Papers Smarter with AI</h1>
+        <p class="mb-4">ResearchMate helps students and researchers master complex academic papers through AI-generated explanations, flashcards, quizzes, and structured study tools.</p>
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a href="{% url 'register' %}" class="btn btn-primary btn-lg px-4">Get Started Free</a>
+            <a href="{% url 'login' %}" class="btn btn-outline-primary btn-lg px-4">Login</a>
+        </div>
+    </div>
+</section>
+
+<!-- How It Works -->
+<section id="how-it-works" class="py-5">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="section-title mb-2">How It Works</h2>
+            <p class="section-subtitle">Three simple steps to transform how you learn from research papers.</p>
+        </div>
+        <div class="row g-4 text-center">
+            <div class="col-md-4">
+                <div class="step-circle">1</div>
+                <h4 class="h5 mb-2">Upload Your Research Paper</h4>
+                <p class="text-muted mb-0">Upload any PDF research paper to your personal library.</p>
+            </div>
+            <div class="col-md-4">
+                <div class="step-circle">2</div>
+                <h4 class="h5 mb-2">AI Analyzes the Paper</h4>
+                <p class="text-muted mb-0">Our AI extracts key concepts, terminology, and structure.</p>
+            </div>
+            <div class="col-md-4">
+                <div class="step-circle">3</div>
+                <h4 class="h5 mb-2">Learn Through Structured Tools</h4>
+                <p class="text-muted mb-0">Study with explanations, flashcards, quizzes, and revision notes.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features -->
+<section id="features" class="py-5 bg-white">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="section-title mb-2">AI Learning Features</h2>
+            <p class="section-subtitle">Everything you need to go from confusion to confidence with any research paper.</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: var(--research-success-soft); color: var(--research-success);">F</div>
+                    <h5 class="mb-1">Beginner Explanation</h5>
+                    <span class="access-badge access-free mb-2">Free</span>
+                    <p class="text-muted small mb-0">Plain-language overviews that make any paper accessible, even if you are new to the topic.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: var(--research-primary-soft); color: var(--research-primary);">T</div>
+                    <h5 class="mb-1">Technical Explanation</h5>
+                    <span class="access-badge access-premium mb-2">Premium</span>
+                    <p class="text-muted small mb-0">Deep-dive technical breakdowns of architecture, methodology, and design decisions.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: var(--research-primary-soft); color: var(--research-primary);">S</div>
+                    <h5 class="mb-1">Section Learning</h5>
+                    <span class="access-badge access-premium mb-2">Premium</span>
+                    <p class="text-muted small mb-0">Section-by-section explanations that guide you through the paper structure.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: var(--research-primary-soft); color: var(--research-primary);">G</div>
+                    <h5 class="mb-1">Glossary</h5>
+                    <span class="access-badge access-premium mb-2">Premium</span>
+                    <p class="text-muted small mb-0">Paper-specific glossary entries that explain terminology in the context of the study.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: var(--research-primary-soft); color: var(--research-primary);">F</div>
+                    <h5 class="mb-1">Flashcards</h5>
+                    <span class="access-badge access-premium mb-2">Premium</span>
+                    <p class="text-muted small mb-0">Active-recall flashcards generated from key concepts, terms, and findings.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: var(--research-primary-soft); color: var(--research-primary);">Q</div>
+                    <h5 class="mb-1">Quiz</h5>
+                    <span class="access-badge access-premium mb-2">Premium</span>
+                    <p class="text-muted small mb-0">Adaptive quizzes to test comprehension and retention of paper content.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: var(--research-primary-soft); color: var(--research-primary);">V</div>
+                    <h5 class="mb-1">Viva Preparation</h5>
+                    <span class="access-badge access-premium mb-2">Premium</span>
+                    <p class="text-muted small mb-0">Potential viva questions and model answers to prepare for oral defenses.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background: var(--research-primary-soft); color: var(--research-primary);">R</div>
+                    <h5 class="mb-1">Revision Notes</h5>
+                    <span class="access-badge access-premium mb-2">Premium</span>
+                    <p class="text-muted small mb-0">Concise revision notes optimized for last-minute exam and presentation prep.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Pricing -->
+<section id="pricing" class="py-5">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="section-title mb-2">Pricing</h2>
+            <p class="section-subtitle">Start free and upgrade when you are ready for full AI-powered learning.</p>
+        </div>
+        <div class="row g-4 justify-content-center">
+            <div class="col-md-4">
+                <div class="pricing-card text-center">
+                    <h5 class="text-uppercase text-muted fw-semibold mb-2">Basic</h5>
+                    <div class="display-6 fw-bold mb-1">Free</div>
+                    <p class="text-muted small mb-3">Forever free for beginners.</p>
+                    <ul class="list-unstyled text-start small mb-4">
+                        <li class="mb-2">Beginner Explanation access</li>
+                        <li class="mb-2">Personal paper library</li>
+                        <li class="mb-2">AI-powered beginner-level learning</li>
+                    </ul>
+                    <a href="{% url 'register' %}" class="btn btn-outline-primary w-100">Get Started Free</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="pricing-card text-center">
+                    <h5 class="text-uppercase text-muted fw-semibold mb-2">Premium Weekly</h5>
+                    <div class="display-6 fw-bold mb-1">Coming Soon</div>
+                    <p class="text-muted small mb-3">Price to be announced.</p>
+                    <ul class="list-unstyled text-start small mb-4">
+                        <li class="mb-2">Full access to all AI learning tools</li>
+                        <li class="mb-2">Technical explanations</li>
+                        <li class="mb-2">Section learning, glossary, and flashcards</li>
+                        <li class="mb-2">Quizzes, viva prep, and revision notes</li>
+                    </ul>
+                    <a href="{% url 'register' %}" class="btn btn-primary w-100">Upgrade</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="pricing-card popular text-center">
+                    <div class="popular-badge">Best Value</div>
+                    <h5 class="text-uppercase text-muted fw-semibold mb-2 mt-2">Premium Monthly</h5>
+                    <div class="display-6 fw-bold mb-1">Coming Soon</div>
+                    <p class="text-muted small mb-3">Price to be announced.</p>
+                    <ul class="list-unstyled text-start small mb-4">
+                        <li class="mb-2">Full access to all AI learning tools</li>
+                        <li class="mb-2">Technical explanations</li>
+                        <li class="mb-2">Section learning, glossary, and flashcards</li>
+                        <li class="mb-2">Quizzes, viva prep, and revision notes</li>
+                    </ul>
+                    <a href="{% url 'register' %}" class="btn btn-primary w-100">Upgrade</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Why ResearchMate -->
+<section class="py-5 bg-white">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="section-title mb-2">Why ResearchMate</h2>
+            <p class="section-subtitle">Built for students who want to truly understand research, not just skim it.</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="benefit-item">
+                    <div class="benefit-check">✓</div>
+                    <p class="mb-0">Simplify complex research papers into clear, digestible explanations.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="benefit-item">
+                    <div class="benefit-check">✓</div>
+                    <p class="mb-0">Learn from beginner to technical level with adaptive AI content.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="benefit-item">
+                    <div class="benefit-check">✓</div>
+                    <p class="mb-0">Generate structured study materials automatically from any PDF.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="benefit-item">
+                    <div class="benefit-check">✓</div>
+                    <p class="mb-0">Practice with quizzes and flashcards to reinforce retention.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="benefit-item">
+                    <div class="benefit-check">✓</div>
+                    <p class="mb-0">Prepare for research viva with AI-generated question banks.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="benefit-item">
+                    <div class="benefit-check">✓</div>
+                    <p class="mb-0">Track learning progress across your personal paper library.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Final CTA -->
+<section class="cta-section text-center">
+    <div class="container">
+        <h2 class="section-title mb-3">Ready to Understand Research Papers Better?</h2>
+        <p class="section-subtitle mb-4">Join ResearchMate and turn every PDF into a structured learning experience.</p>
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a href="{% url 'register' %}" class="btn btn-primary btn-lg px-4">Create Free Account</a>
+            <a href="{% url 'login' %}" class="btn btn-outline-primary btn-lg px-4">Login</a>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="landing-footer">
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <h6 class="text-white fw-semibold mb-2">ResearchMate</h6>
+                <p class="small mb-0">An AI-powered research paper learning platform that helps students understand complex academic literature through structured, interactive study tools.</p>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <h6 class="text-white fw-semibold mb-2">Account</h6>
+                <div class="d-flex flex-column gap-2">
+                    <a href="{% url 'login' %}" class="small">Login</a>
+                    <a href="{% url 'register' %}" class="small">Register</a>
+                </div>
+            </div>
+        </div>
+        <hr class="border-secondary my-4">
+        <div class="text-center small">
+            <p class="mb-0">&copy; {% now 'Y' %} ResearchMate. All rights reserved.</p>
+        </div>
+    </div>
+</footer>
+{% endblock %}

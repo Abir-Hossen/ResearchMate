@@ -241,9 +241,10 @@ class AuthenticationFlowTests(TestCase):
         self.assertRedirects(response, reverse('dashboard'))
         self.assertTrue(response.wsgi_request.user.is_authenticated)
 
-    def test_home_redirects_guests_to_login_and_users_to_dashboard(self):
+    def test_home_redirects_authenticated_users_to_dashboard_and_shows_landing_page_for_guests(self):
         response = self.client.get(reverse('home'))
-        self.assertRedirects(response, reverse('login'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Understand Research Papers Smarter with AI')
 
         user = User.objects.create_user(username='homeuser', email='homeuser@example.com', password='Secret123')
         self.client.force_login(user)
