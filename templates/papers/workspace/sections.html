@@ -6,7 +6,7 @@
         <div class="mb-4">
             <p class="text-uppercase text-muted fw-semibold mb-2 letter-space">Section Learning</p>
             <h4 class="display-6 fw-bold mb-3">Section Learning</h4>
-            <p class="lead text-muted mb-0">Read each paper section as a guided learning checkpoint, with meaning, purpose, key points, and what to understand before moving on.</p>
+            <p class="lead text-muted mb-0">Read each paper section with a concise, paper-specific explanation to guide your understanding.</p>
         </div>
 
         {% if section_learning_sections %}
@@ -20,40 +20,7 @@
                         </h2>
                         <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ forloop.counter }}" data-bs-parent="#sectionLearningAccordion">
                             <div class="accordion-body">
-                                <div class="mb-3">
-                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Summary</h6>
-                                    <p class="mb-0">{{ section.summary }}</p>
-                                </div>
-                                <div class="mb-3">
-                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Purpose</h6>
-                                    <p class="mb-0">{{ section.purpose }}</p>
-                                </div>
-                                <div class="mb-3">
-                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Key Points</h6>
-                                    <ul class="mb-0">
-                                        {% for point in section.key_points %}
-                                            <li>{{ point }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                                <div class="mb-3">
-                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Important Terms</h6>
-                                    <ul class="mb-0">
-                                        {% for term in section.important_terms %}
-                                            <li>{{ term }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                                {% if section.conclusion %}
-                                <div class="mb-3">
-                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Conclusion</h6>
-                                    <p class="mb-0">{{ section.conclusion }}</p>
-                                </div>
-                                {% endif %}
-                                <div>
-                                    <h6 class="text-uppercase text-muted fw-semibold mb-2">Student Note</h6>
-                                    <p class="mb-0">{{ section.student_note }}</p>
-                                </div>
+                                <p class="mb-0">{{ section.summary }}</p>
                             </div>
                         </div>
                     </div>
@@ -87,8 +54,7 @@
     box-shadow: none;
 }
 
-.accordion-body p,
-.accordion-body li {
+.accordion-body p {
     line-height: 1.75;
     color: #17324d;
 }

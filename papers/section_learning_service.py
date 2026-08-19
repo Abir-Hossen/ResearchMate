@@ -130,17 +130,19 @@ def _looks_like_heading(line):
     text = re.sub(r'\s+', ' ', line).strip()
     if not text:
         return False
-    if len(text.split()) > 8:
+    if len(text.split()) > 6:
         return False
     lowered = text.lower()
     heading_keywords = (
-        'abstract', 'introduction', 'related work', 'background', 'methodology',
-        'materials and methods', 'dataset', 'experiments', 'results', 'discussion',
-        'limitations', 'conclusion', 'future work', 'appendix'
+        'abstract', 'introduction', 'related work', 'background', 'literature review',
+        'methodology', 'methods', 'materials and methods', 'system architecture',
+        'proposed method', 'implementation', 'dataset', 'experimental setup',
+        'experiments', 'results', 'discussion', 'limitations', 'conclusion',
+        'future work', 'appendix', 'references', 'bibliography', 'acknowledgements'
     )
-    if lowered in heading_keywords or lowered.startswith(heading_keywords):
+    if lowered in heading_keywords or any(lowered.startswith(keyword + ' ') for keyword in heading_keywords):
         return True
-    return bool(re.match(r'^(#+\s*)?[A-Z][A-Za-z0-9 /&()\-]{1,80}$', text))
+    return False
 
 
 def _prepare_section_text(text):
@@ -320,6 +322,7 @@ def generate_section_learning(paper, force_refresh=False):
         raise SectionLearningError('AI response did not include any usable sections.')
 
     cleaned_sections = []
+    seen_titles = set()
     for index, raw_section in enumerate(raw_sections, start=1):
         if not isinstance(raw_section, dict):
             continue
@@ -337,13 +340,16 @@ def generate_section_learning(paper, force_refresh=False):
         if not explanation:
             continue
 
-        # Enforce 100-150 word range with tolerance
+        # Enforce 100-150 word range
         word_count = len(explanation.split())
-        if word_count > 160:
+        if word_count > 150:
             words = explanation.split()
-            explanation = ' '.join(words[:140]) + '...'
-        elif word_count < 90 and len(explanation) < 600:
-            explanation = explanation
+            explanation = ' '.join(words[:150])
+
+        normalized_title = re.sub(r'\s+', ' ', title).strip().lower()
+        if normalized_title in seen_titles:
+            continue
+        seen_titles.add(normalized_title)
 
         cleaned_sections.append({
             'title': title,
@@ -359,5 +365,9 @@ def generate_section_learning(paper, force_refresh=False):
 
     if not cleaned_sections:
         raise SectionLearningError('AI response did not include any usable section explanations.')
+
+    # Cap at 8 sections to control token usage
+    if len(cleaned_sections) > 8:
+        cleaned_sections = cleaned_sections[:8]
 
     return _persist_section_learning(paper, cleaned_sections)

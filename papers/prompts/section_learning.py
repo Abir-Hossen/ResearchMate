@@ -1,4 +1,4 @@
-def _compact_section_text(section_text, max_chars=8000):
+def _compact_section_text(section_text, max_chars=6000):
     """Compact paper text to stay within token limits while preserving content."""
     if not section_text:
         return ''
@@ -19,30 +19,39 @@ def build_section_learning_prompt(extracted_text, paper_context=None):
         return ''
 
     compact_text = _compact_section_text(extracted_text)
-    return f"""You are an expert academic reading tutor. Analyze the following research paper text. Identify every major section that exists in the paper, then write a professional, paper-specific explanation for each section.
+    return f"""You are an expert academic reading tutor. Analyze the research paper text below and identify its actual sections.
 
-Paper text:
-{compact_text}
+STEP 1 - IDENTIFY SECTIONS:
+- Read through the paper text carefully.
+- Identify ALL major sections that genuinely exist in the paper.
+- Valid section names include: Abstract, Introduction, Related Work, Literature Review, Background, Methodology, Methods, Materials and Methods, Proposed Method, System Architecture, Implementation, Dataset, Experimental Setup, Experiments, Results, Discussion, Limitations, Conclusion, Future Work.
+- IGNORE these if they appear: References, Bibliography, Acknowledgements, Appendix.
+- Return between 3 and 8 sections. Include every meaningful section you can find.
+- Only omit a section if it genuinely does not exist in the paper.
 
-Return ONLY valid JSON with this exact schema:
+STEP 2 - WRITE EXPLANATIONS:
+- For each section, write exactly ONE concise explanation of 100-150 words.
+- Every explanation MUST reference specific content from the paper (methods, datasets, results, claims, numbers, technical details).
+- Do NOT write generic academic filler. Do NOT provide a general paper summary.
+- Each explanation should help a student understand what that specific section contributes to the paper.
+
+OUTPUT FORMAT - Return ONLY valid JSON:
 {{
   "sections": [
     {{
-      "title": "Section Name",
-      "explanation": "100-150 word professional explanation grounded in the paper text."
+      "title": "Exact section name from the paper",
+      "explanation": "100-150 word paper-specific explanation."
     }}
   ]
 }}
 
-Rules:
-- Identify ONLY sections that genuinely exist in the paper. Do not invent sections.
-- Use clear, short section titles (e.g., Abstract, Introduction, Related Work, Methodology, Results, Conclusion).
-- If the paper has no clear section headings, return a single section titled "Main Content".
-- Each explanation must be 100-150 words.
-- Each explanation must reference specific content from the paper (methods, datasets, results, claims, etc.).
-- Write in a professional academic tone suitable for a university student.
-- Do NOT include markdown, code fences, or any text outside the JSON object.
-- Return ONLY the JSON object, nothing else.
+RULES:
+- Return between 3 and 8 sections. Include ALL sections that exist.
+- Do NOT include markdown, code fences, or any text outside the JSON.
+- Do NOT invent facts or sections not supported by the paper text.
+
+Paper text:
+{compact_text}
 """
 
 
