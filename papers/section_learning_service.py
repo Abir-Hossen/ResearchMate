@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 
@@ -9,6 +10,31 @@ from .prompts.section_learning import build_section_learning_prompt
 from .response_validator import validate_json_response
 
 logger = logging.getLogger(__name__)
+
+
+def _repair_section_json(text):
+    if not isinstance(text, str):
+        return text
+
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r'^```\w*\n?', '', text)
+    if text.endswith("```"):
+        text = re.sub(r'\n?```$', '', text)
+
+    text = "".join(char for char in text if char >= " " or char in "\n\r\t")
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        text = text[start:end + 1]
+
+    text = text.replace("\n", "\n").replace("\r", "\r").replace("\t", "\t")
+    text = re.sub(r'"\s*\n\s*"', " ", text)
+    text = re.sub(r'"\s*\r\s*"', " ", text)
+    text = re.sub(r'"\s*\t\s*"', " ", text)
+
+    return text
 
 
 class SectionLearningError(ValueError):
@@ -191,25 +217,121 @@ def _extract_sections_from_headings(extracted_text):
     return sections
 
 
-def _extract_section_excerpt(extracted_text, section_title):
-    if not extracted_text or not section_title:
-        return _prepare_section_text(extracted_text or '')
+FIXED_SECTIONS = [
+    ('Abstract', 'abstract'),
+    ('Introduction', 'introduction'),
+    ('Related Work', 'related work|literature review'),
+    ('Methodology', 'methodology|methods|materials and methods|proposed method|system architecture|implementation'),
+    ('Results and Discussion', 'results|discussion'),
+    ('Conclusion', 'conclusion|conclusions|future work'),
+]
 
-    cleaned_title = re.sub(r'\s+', ' ', section_title).strip().lower()
+COMBINED_SECTION_PATTERNS = {
+    'Results and Discussion': ['results', 'discussion'],
+}
+
+
+def _section_matches_heading(section_title, heading_pattern):
+    if not section_title or not heading_pattern:
+        return False
+    normalized = re.sub(r'\s+', ' ', section_title).strip().lower()
+    normalized = re.sub(r'^(?:chapter|section|part)\s+\w+\s*[.:\-]?\s*', '', normalized)
+    normalized = re.sub(r'^[a-z0-9]+(?:\.[a-z0-9]+)*\.?\s*', '', normalized)
+    normalized = normalized.strip()
+    for keyword in heading_pattern.split('|'):
+        keyword = keyword.strip()
+        if not keyword:
+            continue
+        if normalized == keyword or normalized.startswith(keyword + ' ') or normalized.startswith(keyword + ':'):
+            return True
+    return False
+
+
+def _extract_combined_section_text(extracted_text, heading_patterns):
+    if not extracted_text or not heading_patterns:
+        return ''
+
     lines = extracted_text.splitlines()
+    excerpts = []
 
+    for pattern in heading_patterns:
+        pattern = pattern.strip()
+        if not pattern:
+            continue
+
+        start_index = None
+        matched_line_index = None
+
+        for index, line in enumerate(lines):
+            normalized_line = re.sub(r'\s+', ' ', line).strip().lower()
+            if not normalized_line:
+                continue
+            if _section_matches_heading(normalized_line, pattern):
+                start_index = index + 1
+                matched_line_index = index
+                break
+
+        if start_index is None or start_index >= len(lines):
+            continue
+
+        excerpt_lines = []
+        for index in range(start_index, len(lines)):
+            normalized_line = re.sub(r'\s+', ' ', lines[index]).strip().lower()
+            if not normalized_line:
+                continue
+            if _section_matches_heading(normalized_line, pattern) and index > matched_line_index + 1:
+                break
+            if _looks_like_heading(lines[index]) and index > matched_line_index + 1:
+                break
+            excerpt_lines.append(lines[index])
+
+        excerpt = '\n'.join(excerpt_lines).strip()
+        if excerpt:
+            excerpts.append(excerpt)
+
+    if not excerpts:
+        return ''
+
+    combined = '\n\n'.join(excerpts)
+    return _prepare_section_text(combined)
+
+
+def _extract_section_excerpt(extracted_text, section_title, heading_pattern=None):
+    if not extracted_text:
+        return ''
+
+    lines = extracted_text.splitlines()
     start_index = None
+    matched_line_index = None
+
     for index, line in enumerate(lines):
-        if cleaned_title in re.sub(r'\s+', ' ', line).strip().lower():
-            start_index = index
+        normalized_line = re.sub(r'\s+', ' ', line).strip().lower()
+        if not normalized_line:
+            continue
+
+        if heading_pattern and _section_matches_heading(normalized_line, heading_pattern):
+            start_index = index + 1
+            matched_line_index = index
             break
 
-    if start_index is None:
+        if not heading_pattern and section_title:
+            cleaned_title = re.sub(r'\s+', ' ', section_title).strip().lower()
+            if cleaned_title in normalized_line:
+                start_index = index + 1
+                matched_line_index = index
+                break
+
+    if start_index is None or start_index >= len(lines):
         return _prepare_section_text(extracted_text)
 
     excerpt_lines = []
-    for index in range(start_index + 1, len(lines)):
-        if _looks_like_heading(lines[index]) and index > start_index + 1:
+    for index in range(start_index, len(lines)):
+        normalized_line = re.sub(r'\s+', ' ', lines[index]).strip().lower()
+        if not normalized_line:
+            continue
+        if heading_pattern and _section_matches_heading(normalized_line, heading_pattern) and index > matched_line_index + 1:
+            break
+        if not heading_pattern and _looks_like_heading(lines[index]) and index > matched_line_index + 1:
             break
         excerpt_lines.append(lines[index])
 
@@ -277,6 +399,43 @@ def _find_section_text(parsed_sections, section_title):
     return ''
 
 
+def _build_section_overview(extracted_text):
+    if not extracted_text:
+        return ''
+
+    lines = extracted_text.splitlines()
+    sections = []
+    current_heading = None
+    current_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        if _looks_like_heading(stripped):
+            if current_heading and current_lines:
+                sections.append((current_heading, '\n'.join(current_lines).strip()))
+            current_heading = stripped
+            current_lines = []
+        elif current_heading is not None:
+            current_lines.append(stripped)
+
+    if current_heading and current_lines:
+        sections.append((current_heading, '\n'.join(current_lines).strip()))
+
+    overview_parts = []
+    for heading, content in sections:
+        words = content.split()[:80]
+        snippet = ' '.join(words)
+        if len(content.split()) > 80:
+            snippet += '...'
+        overview_parts.append(f'{heading}:\n{snippet}')
+
+    overview = '\n\n'.join(overview_parts)
+    return _prepare_section_text(overview)
+
+
 def generate_section_learning(paper, force_refresh=False):
     """
     Generate section learning explanations using whole-paper AI analysis.
@@ -300,10 +459,11 @@ def generate_section_learning(paper, force_refresh=False):
     ai_service = AIService()
     
     try:
-        prompt = build_section_learning_prompt(content.extracted_text)
+        overview = _build_section_overview(content.extracted_text)
+        prompt = build_section_learning_prompt(overview)
         explanation_response = ai_service.generate_feature(
             'section_learning',
-            content.extracted_text,
+            overview,
             prompt_type='section_detection',
         )
     except Exception as exc:
@@ -313,7 +473,11 @@ def generate_section_learning(paper, force_refresh=False):
         raise SectionLearningError(f'AI section generation failed: {exc}') from exc
 
     valid_response, response_payload, response_error = validate_json_response(explanation_response)
-    
+
+    if not valid_response or not isinstance(response_payload, dict):
+        repaired = _repair_section_json(explanation_response)
+        valid_response, response_payload, response_error = validate_json_response(repaired)
+
     if not valid_response or not isinstance(response_payload, dict):
         raise SectionLearningError(f'AI returned an invalid response: {response_error}')
 
@@ -321,39 +485,52 @@ def generate_section_learning(paper, force_refresh=False):
     if not raw_sections:
         raise SectionLearningError('AI response did not include any usable sections.')
 
-    cleaned_sections = []
-    seen_titles = set()
-    for index, raw_section in enumerate(raw_sections, start=1):
+    section_map = {}
+    for raw_section in raw_sections:
         if not isinstance(raw_section, dict):
             continue
-
-        title = _extract_section_title(raw_section) or f'Section {index}'
+        title = _extract_section_title(raw_section)
+        if not title:
+            continue
         explanation = str(raw_section.get('explanation') or '').strip()
-        
-        # If no explanation field, try common alternatives
         if not explanation:
             for key in ('summary', 'description', 'content', 'text', 'student_note', 'purpose'):
                 if raw_section.get(key):
                     explanation = str(raw_section[key]).strip()
                     break
-
         if not explanation:
             continue
-
-        # Enforce 100-150 word range
         word_count = len(explanation.split())
         if word_count > 150:
             words = explanation.split()
             explanation = ' '.join(words[:150])
-
         normalized_title = re.sub(r'\s+', ' ', title).strip().lower()
-        if normalized_title in seen_titles:
-            continue
-        seen_titles.add(normalized_title)
+        if normalized_title not in section_map:
+            section_map[normalized_title] = explanation
+
+    cleaned_sections = []
+    for fixed_title, heading_pattern in FIXED_SECTIONS:
+        explanation = ''
+        for title_key, expl in section_map.items():
+            if _section_matches_heading(title_key, heading_pattern):
+                explanation = expl
+                break
+
+        if not explanation:
+            combined_patterns = COMBINED_SECTION_PATTERNS.get(fixed_title)
+            if combined_patterns:
+                excerpt = _extract_combined_section_text(content.extracted_text, combined_patterns)
+            else:
+                excerpt = _extract_section_excerpt(content.extracted_text, fixed_title, heading_pattern=heading_pattern)
+            if excerpt and excerpt.strip():
+                words = excerpt.split()
+                explanation = ' '.join(words[:150])
+            else:
+                explanation = 'This section is not present in the paper.'
 
         cleaned_sections.append({
-            'title': title,
-            'order': index,
+            'title': fixed_title,
+            'order': len(cleaned_sections) + 1,
             'summary': explanation,
             'purpose': '',
             'conclusion': '',
@@ -362,12 +539,5 @@ def generate_section_learning(paper, force_refresh=False):
             'student_note': '',
             'original_text': '',
         })
-
-    if not cleaned_sections:
-        raise SectionLearningError('AI response did not include any usable section explanations.')
-
-    # Cap at 8 sections to control token usage
-    if len(cleaned_sections) > 8:
-        cleaned_sections = cleaned_sections[:8]
 
     return _persist_section_learning(paper, cleaned_sections)

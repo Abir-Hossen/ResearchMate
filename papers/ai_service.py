@@ -51,7 +51,7 @@ class AIService:
         prompt = self.build_prompt(feature_name, extracted_text, prompt_type=prompt_type, section_title=section_title)
         # Use lower completion limit for section learning to minimize token usage
         if feature_name == 'section_learning' and max_completion_tokens is None:
-            max_completion_tokens = 2000
+            max_completion_tokens = 4000
         if feature_name == 'beginner' and max_completion_tokens is None:
             max_completion_tokens = 1500
         # Only pass max_completion_tokens if it's not None

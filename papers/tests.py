@@ -360,8 +360,14 @@ class PaperUploadTests(TestCase):
         self.assertIn('"sections"', prompt)
         self.assertIn('"title"', prompt)
         self.assertIn('"explanation"', prompt)
-        self.assertIn('100-150 word', prompt)
+        self.assertIn('80-120 word', prompt)
         self.assertIn('expert academic reading tutor', prompt)
+        self.assertIn('Abstract', prompt)
+        self.assertIn('Introduction', prompt)
+        self.assertIn('Related Work', prompt)
+        self.assertIn('Methodology', prompt)
+        self.assertIn('Results and Discussion', prompt)
+        self.assertIn('Conclusion', prompt)
         self.assertNotIn('"summary"', prompt)
 
     def test_section_learning_prompt_compacts_large_section_text(self):
@@ -371,10 +377,10 @@ class PaperUploadTests(TestCase):
 
         self.assertIn('Paper text:', prompt)
         self.assertIn('[truncated]', prompt)
-        self.assertLess(len(prompt), 12000)
+        self.assertLess(len(prompt), 25000)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Conclusion","explanation":"A concise explanation of the conclusion section that wraps up the main point and reinforces the key takeaway from the paper."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"The motivation and context are explained."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"The approach is explained clearly."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
     def test_generate_section_learning_persists_explanation(self, mock_generate):
         user = User.objects.create_user(username='sectionconclusion', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Conclusion Paper', pdf_file=SimpleUploadedFile('section-conclusion.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -388,8 +394,9 @@ class PaperUploadTests(TestCase):
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual(len(sections), 1)
-        self.assertEqual(sections[0].summary, 'A concise explanation of the conclusion section that wraps up the main point and reinforces the key takeaway from the paper.')
+        self.assertEqual(len(sections), 6)
+        self.assertEqual(sections[5].title, 'Conclusion')
+        self.assertIn('closes the discussion', sections[5].summary)
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
@@ -402,7 +409,7 @@ class PaperUploadTests(TestCase):
             extracted_text='Introduction\nThis paper introduces the problem and the method.\n\nMethods\nThe system is implemented and tested on data.',
             extraction_status='Ready',
         )
-        mock_generate.return_value = '{"sections":[{"title":"Introduction","explanation":"A concise explanation."},{"title":"Methods","explanation":"Another explanation."}]}'
+        mock_generate.return_value = '{"sections":[{"title":"Abstract","explanation":"A brief overview."},{"title":"Introduction","explanation":"A concise explanation."},{"title":"Related Work","explanation":"Prior work is reviewed."},{"title":"Methodology","explanation":"The approach is explained."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}'
 
         from .section_learning_service import generate_section_learning
 
@@ -410,8 +417,11 @@ class PaperUploadTests(TestCase):
 
         first_call = mock_generate.call_args_list[0]
         self.assertEqual(first_call.args[0], 'section_learning')
-        # The whole paper text should be sent to the AI for section detection and explanation
-        self.assertIn('This paper introduces the problem and the method', first_call.args[1])
+        # A compact paper overview is sent to the AI
+        sent_text = first_call.args[1]
+        self.assertIn('Introduction:', sent_text)
+        self.assertIn('This paper introduces the problem and the method', sent_text)
+        self.assertIn('Methods:', sent_text)
         self.assertEqual(first_call.kwargs['prompt_type'], 'section_detection')
 
     def test_prepare_section_learning_text_compacts_large_input(self):
@@ -433,12 +443,12 @@ class PaperUploadTests(TestCase):
         self.assertIn('"sections"', detection_prompt)
         self.assertIn('"title"', detection_prompt)
         self.assertIn('"explanation"', detection_prompt)
-        self.assertIn('100-150 word', detection_prompt)
+        self.assertIn('80-120 word', detection_prompt)
         self.assertIn('expert academic reading tutor', detection_prompt)
         self.assertNotIn('entire paper', detection_prompt.lower())
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the research problem and motivates the approach."},{"title":"Methods","explanation":"This section describes the system implementation and evaluation setup."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivates the approach."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results and Discussion","explanation":"This section presents the experimental results and findings."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
     def test_generate_section_learning_accepts_plain_string_titles(self, mock_generate):
         user = User.objects.create_user(username='sectionstrings', password='Secret123')
         paper = Paper.objects.create(owner=user, title='String Titles Paper', pdf_file=SimpleUploadedFile('string-titles.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -452,13 +462,17 @@ class PaperUploadTests(TestCase):
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual(len(sections), 2)
-        self.assertEqual(sections[0].title, 'Introduction')
-        self.assertEqual(sections[1].title, 'Methods')
+        self.assertEqual(len(sections), 6)
+        self.assertEqual(sections[0].title, 'Abstract')
+        self.assertEqual(sections[1].title, 'Introduction')
+        self.assertEqual(sections[2].title, 'Related Work')
+        self.assertEqual(sections[3].title, 'Methodology')
+        self.assertEqual(sections[4].title, 'Results and Discussion')
+        self.assertEqual(sections[5].title, 'Conclusion')
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the research problem and motivates the approach."},{"title":"Methods","explanation":"This section explains the implementation details and evaluation setup."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivates the approach."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results and Discussion","explanation":"This section presents the experimental results and findings."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
     def test_generate_section_learning_uses_detection_then_single_section_explanations(self, mock_generate):
         user = User.objects.create_user(username='sectionpipeline', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Pipeline Paper', pdf_file=SimpleUploadedFile('section-pipeline.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -472,13 +486,14 @@ class PaperUploadTests(TestCase):
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual(len(sections), 2)
+        self.assertEqual(len(sections), 6)
         self.assertEqual(mock_generate.call_count, 1)
-        self.assertEqual(sections[0].title, 'Introduction')
-        self.assertEqual(sections[1].title, 'Methods')
+        self.assertEqual(sections[0].title, 'Abstract')
+        self.assertEqual(sections[1].title, 'Introduction')
+        self.assertEqual(sections[5].title, 'Conclusion')
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"The motivation and context are explained."},{"title":"Methods","explanation":"The approach is explained clearly."},{"title":"Results","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"The motivation and context are explained."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"The approach is explained clearly."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
     def test_generate_section_learning_uses_extracted_headings_when_available(self, mock_generate):
         user = User.objects.create_user(username='sectionheadings', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Headings Paper', pdf_file=SimpleUploadedFile('section-headings.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -492,11 +507,12 @@ class PaperUploadTests(TestCase):
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual([section.title for section in sections], ['Abstract', 'Introduction', 'Methods', 'Results', 'Conclusion'])
+        self.assertEqual(len(sections), 6)
+        self.assertEqual([s.title for s in sections], ['Abstract', 'Introduction', 'Related Work', 'Methodology', 'Results and Discussion', 'Conclusion'])
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the research problem, explains the gap in prior systems, and motivates the proposed solution by emphasizing the practical constraints and limitations that motivate the study in a concrete way."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem, explains the gap in prior systems, and motivates the proposed solution by emphasizing the practical constraints and limitations that motivate the study in a concrete way."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"The approach is explained clearly."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
     def test_generate_section_learning_persists_and_reuses_database_value(self, mock_generate):
         user = User.objects.create_user(username='sectionuser', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Learning Paper', pdf_file=SimpleUploadedFile('section-learning.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -505,13 +521,14 @@ class PaperUploadTests(TestCase):
         from .section_learning_service import generate_section_learning
 
         sections = generate_section_learning(paper)
-        self.assertEqual(len(sections), 1)
+        self.assertEqual(len(sections), 6)
         self.assertEqual(mock_generate.call_count, 1)
-        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 1)
-        self.assertIn('gap', PaperSection.objects.get(paper=paper).summary)
+        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 6)
+        intro_section = PaperSection.objects.get(paper=paper, title='Introduction')
+        self.assertIn('technical paper excerpt', intro_section.summary)
 
         sections_again = generate_section_learning(paper)
-        self.assertEqual(len(sections_again), 1)
+        self.assertEqual(len(sections_again), 6)
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
@@ -554,7 +571,7 @@ class PaperUploadTests(TestCase):
         self.assertContains(response, 'This section motivates the problem and explains why the work matters.')
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section frames the research problem and motivates the study."},{"title":"Methods","explanation":"This section explains the architecture and evaluation setup."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section motivates the problem and explains why the work matters."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results and Discussion","explanation":"This section presents the results."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
     def test_generate_section_learning_force_refresh_replaces_outdated_sections(self, mock_generate):
         user = User.objects.create_user(username='sectionrefresh', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Refresh Paper', pdf_file=SimpleUploadedFile('section-refresh.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -573,13 +590,13 @@ class PaperUploadTests(TestCase):
         from .section_learning_service import generate_section_learning
 
         sections = generate_section_learning(paper, force_refresh=True)
-        self.assertEqual(len(sections), 2)
-        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 2)
+        self.assertEqual(len(sections), 6)
+        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 6)
         self.assertEqual(mock_generate.call_count, 1)
-        self.assertTrue(any(section.title == 'Methods' for section in sections))
+        self.assertTrue(any(section.title == 'Methodology' for section in sections))
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the problem and motivation."},{"title":"Methods","explanation":"This section describes the methodology and experimental approach."},{"title":"Results","explanation":"A single results section explaining the experimental outcomes and key metrics reported in the paper."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the problem and motivation."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results and Discussion","explanation":"A single results section explaining the experimental outcomes and key metrics reported in the paper."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
     def test_generate_section_learning_deduplicates_repeated_sections(self, mock_generate):
         """Test that duplicate section headings are deduplicated (only first occurrence used)."""
         user = User.objects.create_user(username='sectiondedup', password='Secret123')
@@ -603,9 +620,9 @@ Additional results in a separate section.
         from .section_learning_service import generate_section_learning
 
         sections = generate_section_learning(paper)
-        # Should have only 3 unique sections (Introduction, Methods, Results once)
-        self.assertEqual(len(sections), 3)
-        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 3)
+        # Should have exactly 6 fixed sections
+        self.assertEqual(len(sections), 6)
+        self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 6)
         # Should only generate 1 AI request (whole paper analysis)
         self.assertEqual(mock_generate.call_count, 1)
         # Verify section titles are unique
@@ -613,7 +630,7 @@ Additional results in a separate section.
         self.assertEqual(len(section_titles), len(set(title.lower() for title in section_titles)))
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"This section provides a brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Related Work","explanation":"This section reviews related work and identifies the research gap."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results","explanation":"This section presents the experimental results and findings."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."},{"title":"Limitations","explanation":"This section discusses the limitations of the current approach."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"This section provides a brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Related Work","explanation":"This section reviews related work and identifies the research gap."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results and Discussion","explanation":"This section presents the experimental results and findings."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
     def test_generate_section_learning_detects_standard_paper_sections(self, mock_generate):
         user = User.objects.create_user(username='sectionstandard', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Standard Sections Paper', pdf_file=SimpleUploadedFile('standard.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -627,12 +644,12 @@ Additional results in a separate section.
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual(len(sections), 7)
-        self.assertEqual([s.title for s in sections], ['Abstract', 'Introduction', 'Related Work', 'Methodology', 'Results', 'Conclusion', 'Limitations'])
+        self.assertEqual(len(sections), 6)
+        self.assertEqual([s.title for s in sections], ['Abstract', 'Introduction', 'Related Work', 'Methodology', 'Results and Discussion', 'Conclusion'])
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results","explanation":"This section presents the experimental results and findings."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results and Discussion","explanation":"This section presents the experimental results and findings."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
     def test_generate_section_learning_detects_numbered_headings(self, mock_generate):
         user = User.objects.create_user(username='sectionnumbered', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Numbered Sections Paper', pdf_file=SimpleUploadedFile('numbered.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -646,12 +663,12 @@ Additional results in a separate section.
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual(len(sections), 4)
-        self.assertEqual([s.title for s in sections], ['Introduction', 'Methodology', 'Results', 'Conclusion'])
+        self.assertEqual(len(sections), 6)
+        self.assertEqual([s.title for s in sections], ['Abstract', 'Introduction', 'Related Work', 'Methodology', 'Results and Discussion', 'Conclusion'])
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Results","explanation":"A single results section explaining the experimental outcomes and key metrics reported in the paper."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results and Discussion","explanation":"A single results section explaining the experimental outcomes and key metrics reported in the paper."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
     def test_generate_section_learning_normalizes_duplicate_heading_patterns(self, mock_generate):
         user = User.objects.create_user(username='sectionnormalize', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Normalize Sections Paper', pdf_file=SimpleUploadedFile('normalize.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -665,12 +682,12 @@ Additional results in a separate section.
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual(len(sections), 1)
-        self.assertEqual(sections[0].title, 'Results')
+        self.assertEqual(len(sections), 6)
+        self.assertEqual(sections[4].title, 'Results and Discussion')
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Main Content","explanation":"This paper discusses a machine learning approach for image classification using convolutional neural networks and evaluates it on standard benchmarks."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
     def test_generate_section_learning_fallback_main_content_when_no_headings(self, mock_generate):
         user = User.objects.create_user(username='sectionmaincontent', password='Secret123')
         paper = Paper.objects.create(owner=user, title='No Headings Paper', pdf_file=SimpleUploadedFile('noheadings.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -684,33 +701,77 @@ Additional results in a separate section.
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual(len(sections), 1)
-        self.assertEqual(sections[0].title, 'Main Content')
+        self.assertEqual(len(sections), 6)
+        self.assertEqual(sections[0].title, 'Abstract')
+        self.assertEqual(sections[5].title, 'Conclusion')
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Methodology","explanation":"This section describes the methodology and experimental approach in detail."},{"title":"Results","explanation":"This section presents the results."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"This section describes the methodology and experimental approach in detail."},{"title":"Results and Discussion","explanation":"This section presents the results."},{"title":"Conclusion","explanation":"This section concludes the paper and discusses implications."}]}')
     def test_generate_section_learning_truncates_long_section_text(self, mock_generate):
         user = User.objects.create_user(username='sectiontruncate', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Truncate Paper', pdf_file=SimpleUploadedFile('truncate.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
-        long_text = 'Methodology\n' + ('word ' * 2000) + '\n\nResults\nsome results'
+        long_text = 'Methodology\n' + ('word ' * 12000) + '\n\nResults\nsome results'
         PaperContent.objects.create(paper=paper, extracted_text=long_text, extraction_status='Ready')
 
         from .section_learning_service import generate_section_learning
 
         sections = generate_section_learning(paper)
 
-        self.assertEqual(len(sections), 2)
-        self.assertEqual(sections[0].title, 'Methodology')
+        self.assertEqual(len(sections), 6)
+        self.assertEqual(sections[3].title, 'Methodology')
         self.assertEqual(mock_generate.call_count, 1)
-        # Verify the whole paper text was sent to the AI
+        # Verify the overview was sent to the AI
         sent_text = mock_generate.call_args.args[1]
-        self.assertIn('word word word', sent_text)
-        # The prompt builder compacts the text, so verify the prompt length is bounded
-        from papers.prompts.section_learning import build_section_learning_prompt
-        prompt = build_section_learning_prompt(sent_text)
-        self.assertLessEqual(len(prompt), 12000)
-        self.assertIn('[truncated]', prompt)
+        self.assertIn('Methodology:', sent_text)
+        self.assertIn('Results:', sent_text)
+        # Verify the long methodology text was compacted in the overview
+        self.assertLess(sent_text.count('word'), 100)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."}]}')
+    def test_generate_section_learning_combined_results_discussion_fallback(self, mock_generate):
+        user = User.objects.create_user(username='sectioncombined', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Combined Results Paper', pdf_file=SimpleUploadedFile('combined.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='Abstract\nThis is the abstract.\n\nIntroduction\nThis is the introduction.\n\n3. Methodology\nThis is methodology.\n\n4. Results\nThese are results.\n\n5. Discussion\nThis is discussion.\n\n6. Conclusion\nThis is conclusion.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 6)
+        titles = [s.title for s in sections]
+        self.assertEqual(titles, ['Abstract', 'Introduction', 'Related Work', 'Methodology', 'Results and Discussion', 'Conclusion'])
+        self.assertIn('results', sections[4].summary.lower())
+        self.assertIn('discussion', sections[4].summary.lower())
+        self.assertEqual(mock_generate.call_count, 1)
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."}]}')
+    def test_generate_section_learning_numbered_headings_fallback(self, mock_generate):
+        user = User.objects.create_user(username='sectionnumberedfallback', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Numbered Fallback Paper', pdf_file=SimpleUploadedFile('numbered-fallback.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(
+            paper=paper,
+            extracted_text='1. Introduction\nThis is the introduction.\n\n2. Methodology\nThis is methodology.\n\n3. Results\nThese are results.\n\n4. Discussion\nThis is discussion.\n\n5. Conclusion\nThis is conclusion.',
+            extraction_status='Ready',
+        )
+
+        from .section_learning_service import generate_section_learning
+
+        sections = generate_section_learning(paper)
+
+        self.assertEqual(len(sections), 6)
+        self.assertEqual(sections[3].title, 'Methodology')
+        self.assertIn('methodology', sections[3].summary.lower())
+        self.assertEqual(sections[4].title, 'Results and Discussion')
+        self.assertIn('results', sections[4].summary.lower())
+        self.assertIn('discussion', sections[4].summary.lower())
+        self.assertEqual(mock_generate.call_count, 1)
 
     def test_glossary_prompt_requests_paper_specific_markdown_output(self):
         prompt = build_glossary_prompt('A paper about convolutional networks and transformers.')

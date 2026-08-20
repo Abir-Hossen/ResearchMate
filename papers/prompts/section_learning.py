@@ -1,11 +1,14 @@
-def _compact_section_text(section_text, max_chars=6000):
+﻿import re
+
+
+def _compact_section_text(section_text, max_chars=4000):
     """Compact paper text to stay within token limits while preserving content."""
     if not section_text:
         return ''
 
-    cleaned = ' '.join((section_text or '').split())
+    cleaned = re.sub(r'\n{3,}', '\n\n', section_text)
     if len(cleaned) <= max_chars:
-        return cleaned
+        return cleaned.strip()
 
     truncated = cleaned[:max_chars]
     if ' ' in truncated:
@@ -14,41 +17,61 @@ def _compact_section_text(section_text, max_chars=6000):
 
 
 def build_section_learning_prompt(extracted_text, paper_context=None):
-    """Build a prompt for whole-paper section detection and explanation generation."""
+    """Build a prompt for fixed-section paper explanation generation."""
     if not extracted_text:
         return ''
 
     compact_text = _compact_section_text(extracted_text)
-    return f"""You are an expert academic reading tutor. Analyze the research paper text below and identify its actual sections.
+    return f"""You are an expert academic reading tutor. Analyze the research paper text below and explain the following 6 sections.
 
-STEP 1 - IDENTIFY SECTIONS:
-- Read through the paper text carefully.
-- Identify ALL major sections that genuinely exist in the paper.
-- Valid section names include: Abstract, Introduction, Related Work, Literature Review, Background, Methodology, Methods, Materials and Methods, Proposed Method, System Architecture, Implementation, Dataset, Experimental Setup, Experiments, Results, Discussion, Limitations, Conclusion, Future Work.
-- IGNORE these if they appear: References, Bibliography, Acknowledgements, Appendix.
-- Return between 3 and 8 sections. Include every meaningful section you can find.
-- Only omit a section if it genuinely does not exist in the paper.
+REQUIRED SECTIONS:
+1. Abstract
+2. Introduction
+3. Related Work
+4. Methodology
+5. Results and Discussion
+6. Conclusion
 
-STEP 2 - WRITE EXPLANATIONS:
-- For each section, write exactly ONE concise explanation of 100-150 words.
-- Every explanation MUST reference specific content from the paper (methods, datasets, results, claims, numbers, technical details).
-- Do NOT write generic academic filler. Do NOT provide a general paper summary.
-- Each explanation should help a student understand what that specific section contributes to the paper.
+For each section, write exactly ONE concise explanation of 80-120 words.
+Every explanation MUST reference specific content from the paper (methods, datasets, results, claims, numbers, technical details).
+Do NOT write generic academic filler.
+
+If a section does not exist in the paper, write "This section is not present in the paper." for that section only.
 
 OUTPUT FORMAT - Return ONLY valid JSON:
 {{
   "sections": [
     {{
-      "title": "Exact section name from the paper",
-      "explanation": "100-150 word paper-specific explanation."
+      "title": "Abstract",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Introduction",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Related Work",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Methodology",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Results and Discussion",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Conclusion",
+      "explanation": "80-120 word paper-specific explanation."
     }}
   ]
 }}
 
 RULES:
-- Return between 3 and 8 sections. Include ALL sections that exist.
+- Return exactly 6 sections in the order shown above.
 - Do NOT include markdown, code fences, or any text outside the JSON.
-- Do NOT invent facts or sections not supported by the paper text.
+- Do NOT invent facts not supported by the paper text.
 
 Paper text:
 {compact_text}
