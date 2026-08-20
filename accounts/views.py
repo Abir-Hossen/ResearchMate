@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.shortcuts import redirect, render
 
 from papers.dashboard_service import get_dashboard_data
+from subscriptions.services import get_current_subscription_status
 
 from .forms import LoginForm, PasswordChangeForm, RegistrationForm
 
@@ -69,6 +70,7 @@ def dashboard_view(request):
     context.update({
         'user': request.user,
         'today': datetime.date.today(),
+        'subscription_status': get_current_subscription_status(request.user),
     })
     return render(request, 'accounts/dashboard.html', context)
 

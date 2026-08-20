@@ -9,6 +9,23 @@
     <a href="{% url 'upload_paper' %}" class="btn btn-primary">Upload Paper</a>
 </div>
 
+{% if subscription_status.has_premium %}
+<div class="alert alert-success d-flex align-items-center gap-3" role="alert">
+    <div>
+        <strong>{{ subscription_status.plan.name }}</strong>
+        <span class="text-muted small"> · Status: {{ subscription_status.status }} · Expires: {{ subscription_status.end_date|date:"M d, Y" }} · {{ subscription_status.days_remaining }} days remaining</span>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-light d-flex align-items-center justify-content-between gap-3" role="alert">
+    <div>
+        <strong>Basic Plan</strong>
+        <span class="text-muted small"> · Beginner Explanation access</span>
+    </div>
+    <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary btn-sm">Upgrade to Premium</a>
+</div>
+{% endif %}
+
 {% if total_papers == 0 %}
     <div class="empty-state">
         <h3 class="h5 mb-3">You haven't uploaded any research papers yet.</h3>

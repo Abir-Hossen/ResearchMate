@@ -11,6 +11,7 @@ from django.test import RequestFactory
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from reportlab.pdfgen import canvas
 
 from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, PaperSection, QuizQuestion, VivaQuestion
@@ -23,6 +24,27 @@ from .response_validator import validate_json_response
 from .services import _get_user_facing_error_message
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .quiz_service import QuizGenerationError, generate_quiz
+
+
+def _create_premium_subscription(user, days=7):
+    from subscriptions.models import SubscriptionPlan, UserSubscription
+    plan, _ = SubscriptionPlan.objects.get_or_create(
+        slug='premium-weekly',
+        defaults={
+            'name': 'Premium Weekly',
+            'description': 'Weekly premium access.',
+            'price': 9.99,
+            'duration_days': days,
+            'is_active': True,
+        },
+    )
+    UserSubscription.objects.create(
+        user=user,
+        plan=plan,
+        status='ACTIVE',
+        start_date=timezone.now(),
+        end_date=timezone.now() + timezone.timedelta(days=days),
+    )
 
 
 class GroqProviderTests(TestCase):
@@ -299,6 +321,7 @@ class PaperUploadTests(TestCase):
 
     def test_technical_page_renders_markdown_sections_for_generated_content(self):
         user = User.objects.create_user(username='technicallayout', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Technical Layout Paper', pdf_file=SimpleUploadedFile('technical.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         AIAnalysis.objects.create(
             paper=paper,
@@ -323,6 +346,7 @@ class PaperUploadTests(TestCase):
     @override_settings(AI_PROVIDER='mock')
     def test_revision_notes_page_generates_and_persists_notes(self):
         user = User.objects.create_user(username='revisionnotesuser', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Revision Notes Paper', pdf_file=SimpleUploadedFile('revision-notes.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='This paper introduces a useful evaluation method.', extraction_status='Ready')
 
@@ -344,6 +368,7 @@ class PaperUploadTests(TestCase):
     @override_settings(AI_PROVIDER='mock')
     def test_technical_page_shows_generate_button_when_content_is_missing(self):
         user = User.objects.create_user(username='technicalbutton', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Technical Button Paper', pdf_file=SimpleUploadedFile('technical-button.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='Technical button extraction content', extraction_status='Ready')
 
@@ -533,6 +558,7 @@ class PaperUploadTests(TestCase):
     @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Introduction","order":1,"summary":"This section motivates the problem and explains why the work matters.","purpose":"It introduces the research problem and its significance.","key_points":["The paper identifies a practical gap.","The authors define the task clearly."],"important_terms":["problem setting","research gap"],"student_note":"Understand the problem before the method."}]}')
     def test_section_learning_page_renders_generated_sections(self, mock_generate):
         user = User.objects.create_user(username='sectionpage', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Section Page Paper', pdf_file=SimpleUploadedFile('section-page.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for section learning.', extraction_status='Ready')
         PaperSection.objects.create(
@@ -762,6 +788,7 @@ Additional results in a separate section.
     @patch('papers.glossary_service.AIService.generate_feature', return_value='''# AI Glossary\n\n## CNN (Convolutional Neural Network)\n\n### Explanation\nCNNs are neural networks that scan local patterns in data.\n\n### Role in This Paper\nThe paper uses CNNs as the core feature extractor for the proposed architecture.''')
     def test_glossary_page_shows_generate_button_and_generated_cards(self, mock_generate):
         user = User.objects.create_user(username='glossaryview', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Glossary View Paper', pdf_file=SimpleUploadedFile('glossary-view.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='This paper studies convolutional networks for image analysis.', extraction_status='Ready')
 
@@ -795,6 +822,7 @@ Additional results in a separate section.
     @override_settings(AI_PROVIDER='mock')
     def test_flashcards_page_shows_generate_button_and_can_generate_cards(self):
         user = User.objects.create_user(username='flashcardview', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Flashcard View Paper', pdf_file=SimpleUploadedFile('flashcards-view.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='This paper studies a task and describes methods and results.', extraction_status='Ready')
 
@@ -833,6 +861,7 @@ Additional results in a separate section.
     @override_settings(AI_PROVIDER='mock')
     def test_quiz_page_resets_previous_answers_when_starting_over(self):
         user = User.objects.create_user(username='quizreset', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Quiz Reset Paper', pdf_file=SimpleUploadedFile('quiz-reset.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='The paper covers a research problem and a proposed solution.', extraction_status='Ready')
         QuizQuestion.objects.create(paper=paper, question='First question', option_a='A', option_b='B', option_c='C', option_d='D', correct_answer='A', explanation='Explanation', display_order=1)
@@ -1057,6 +1086,7 @@ Additional results in a separate section.
     ]) + ']}')
     def test_quiz_page_shows_generate_button_and_can_generate_quiz(self, mock_generate_feature):
         user = User.objects.create_user(username='quizview', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Quiz View Paper', pdf_file=SimpleUploadedFile('quiz-view.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='The paper discusses a research problem and an approach designed to solve it.', extraction_status='Ready')
 
@@ -1084,6 +1114,7 @@ Additional results in a separate section.
     @patch('papers.ai_providers.MockProvider.generate', return_value='{"technical_explanation":"# Technical Explanation\\n\\n## Overall Technical Architecture\\n\\n' + ('This is a complete technical lecture note. ' * 80) + '\\n\\n## Model Architecture\\n\\nThis section teaches the background concepts needed to understand the paper. ","beginner_explanation":"A simple explanation","key_contributions":["Important contribution"],"key_concepts":["Core concept"],"reading_difficulty":{"level":"Intermediate","reason":"A bit technical"},"glossary":[],"flashcards":[],"viva_questions":[]}')
     def test_generate_technical_explanation_persists_once_and_reuses_database_value(self, mock_generate):
         user = User.objects.create_user(username='technicalgen', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Technical Generate Paper', pdf_file=SimpleUploadedFile('technical-generate.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for generation.', extraction_status='Ready')
 
@@ -1104,6 +1135,7 @@ Additional results in a separate section.
     @patch('papers.ai_providers.MockProvider.generate')
     def test_generate_technical_explanation_requests_fresh_api_output_every_time(self, mock_generate):
         user = User.objects.create_user(username='technicalrefresh', password='Secret123')
+        _create_premium_subscription(user)
         paper = Paper.objects.create(owner=user, title='Technical Refresh Paper', pdf_file=SimpleUploadedFile('technical-refresh.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
         PaperContent.objects.create(paper=paper, extracted_text='This is a technical paper excerpt for generation.', extraction_status='Ready')
         AIAnalysis.objects.create(

@@ -27,6 +27,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('papers/', include('papers.urls')),
+    path('subscriptions/', include('subscriptions.urls')),
     path('debug/groq-test/', groq_test_view, name='groq_test'),
 ]
 
