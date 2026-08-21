@@ -64,6 +64,46 @@ def activate_subscription(user, plan):
     return subscription
 
 
+def grant_manual_subscription(user, plan):
+    now = timezone.now()
+    UserSubscription.objects.filter(user=user, status='ACTIVE').update(status='EXPIRED')
+    subscription = UserSubscription.objects.create(
+        user=user,
+        plan=plan,
+        status='ACTIVE',
+        source='ADMIN',
+        start_date=now,
+        end_date=now + timezone.timedelta(days=plan.duration_days),
+    )
+    return subscription
+
+
+def revoke_subscription(user):
+    now = timezone.now()
+    active = user.subscriptions.filter(status='ACTIVE').first()
+    if active is None:
+        return None
+    active.status = 'CANCELLED'
+    active.end_date = now
+    active.save(update_fields=['status', 'end_date', 'updated_at'])
+    return active
+
+
+def extend_subscription(user, additional_days):
+    if additional_days <= 0:
+        raise ValidationError('Extension days must be a positive number.')
+    active = user.subscriptions.filter(status='ACTIVE').first()
+    if active is None:
+        raise ValidationError('No active subscription found to extend.')
+    if active.end_date is None:
+        raise ValidationError('Active subscription has no end date.')
+    if timezone.now() > active.end_date:
+        raise ValidationError('Cannot extend an expired subscription.')
+    active.end_date = active.end_date + timezone.timedelta(days=additional_days)
+    active.save(update_fields=['end_date', 'updated_at'])
+    return active
+
+
 def create_payment_transaction(user, plan):
     if not plan.is_active:
         raise ValidationError('Cannot create a payment transaction for an inactive subscription plan.')

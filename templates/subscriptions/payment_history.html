@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <p class="section-label mb-2">Payments</p>
+        <h2 class="h3 mb-0">Payment History</h2>
+    </div>
+</div>
+
+{% if transactions %}
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Transaction ID</th>
+                        <th>Plan</th>
+                        <th>Amount</th>
+                        <th>Gateway</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for txn in transactions %}
+                    <tr>
+                        <td>{{ txn.transaction_id }}</td>
+                        <td>{{ txn.plan.name }}</td>
+                        <td>{{ txn.amount }} {{ txn.currency }}</td>
+                        <td>{{ txn.get_payment_gateway_display }}</td>
+                        <td><span class="badge bg-{% if txn.status == 'SUCCESS' %}success{% elif txn.status == 'FAILED' %}danger{% elif txn.status == 'CANCELLED' %}secondary{% else %}warning{% endif %}">{{ txn.status }}</span></td>
+                        <td>{{ txn.created_at|date:"M d, Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="empty-state">
+    <h3 class="h5 mb-3">No payment transactions found.</h3>
+    <p class="muted-copy mb-3">You have not made any payments yet.</p>
+    <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary btn-sm">View Premium Plans</a>
+</div>
+{% endif %}
+{% endblock %}

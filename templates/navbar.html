@@ -16,6 +16,14 @@
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'upload_paper' %}active{% endif %}" href="{% url 'upload_paper' %}">Upload Paper</a>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.resolver_match.url_name in 'my_subscription,payment_history,subscription_history' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Subscription</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'subscriptions:my_subscription' %}">My Subscription</a></li>
+                            <li><a class="dropdown-item" href="{% url 'subscriptions:payment_history' %}">Payment History</a></li>
+                            <li><a class="dropdown-item" href="{% url 'subscriptions:subscription_history' %}">Subscription History</a></li>
+                        </ul>
+                    </li>
                 </ul>
                 <div class="d-flex align-items-center gap-2 ms-auto">
                     <a class="btn btn-outline-light btn-sm" href="{% url 'change_password' %}">Change Password</a>

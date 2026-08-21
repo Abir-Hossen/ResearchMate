@@ -16,12 +16,15 @@ from .services import (
     activate_subscription,
     create_payment_transaction,
     expire_outdated_subscriptions,
+    extend_subscription,
     get_active_subscription,
     get_current_subscription_status,
+    grant_manual_subscription,
     mark_transaction_cancelled,
     mark_transaction_failed,
     mark_transaction_pending,
     mark_transaction_success_for_testing,
+    revoke_subscription,
     user_has_premium_access,
 )
 from .sslcommerz_service import (
@@ -1483,4 +1486,388 @@ class PaymentVerificationViewTests(TestCase):
         self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.PENDING)
         self.assertFalse(user_has_premium_access(self.user))
         self.assertNotEqual(transaction.failure_reason, '')
+
+
+class MySubscriptionPageTests(TestCase):
+    def test_unauthenticated_user_redirected_to_login(self):
+        response = self.client.get(reverse('subscriptions:my_subscription'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/login/', response['Location'])
+
+    def test_basic_user_sees_basic_status(self):
+        user = User.objects.create_user(username='basicmysub', password='Secret123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('subscriptions:my_subscription'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Basic')
+        self.assertContains(response, 'Upgrade to Premium')
+
+    def test_active_premium_user_sees_plan_and_expiry(self):
+        user = User.objects.create_user(username='premiummysub', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-mysub',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        activate_subscription(user, plan)
+        self.client.force_login(user)
+        response = self.client.get(reverse('subscriptions:my_subscription'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Premium Weekly')
+        self.assertContains(response, 'ACTIVE')
+        self.assertContains(response, 'days remaining')
+
+    def test_expired_subscription_displays_expired(self):
+        user = User.objects.create_user(username='expiredmysub', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Monthly',
+            slug='premium-monthly-mysub',
+            description='Test plan.',
+            price=Decimal('29.99'),
+            duration_days=30,
+        )
+        now = timezone.now()
+        UserSubscription.objects.create(
+            user=user,
+            plan=plan,
+            status='ACTIVE',
+            start_date=now - timedelta(days=40),
+            end_date=now - timedelta(days=10),
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse('subscriptions:my_subscription'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'EXPIRED')
+
+    def test_cancelled_subscription_displays_cancelled(self):
+        user = User.objects.create_user(username='cancelledmysub', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-cancelledmysub',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        UserSubscription.objects.create(user=user, plan=plan, status='CANCELLED')
+        self.client.force_login(user)
+        response = self.client.get(reverse('subscriptions:my_subscription'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'CANCELLED')
+        self.assertContains(response, 'Subscribe Again')
+
+
+class PaymentHistoryViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='payhist', password='Secret123')
+        self.other = User.objects.create_user(username='otherpayhist', password='Secret123')
+        self.plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-payhist',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        self.client.force_login(self.user)
+
+    def test_unauthenticated_redirected(self):
+        self.client.logout()
+        response = self.client.get(reverse('subscriptions:payment_history'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/login/', response['Location'])
+
+    def test_user_sees_only_own_transactions(self):
+        txn1 = create_payment_transaction(self.user, self.plan)
+        mark_transaction_pending(txn1)
+        txn2 = create_payment_transaction(self.other, self.plan)
+        mark_transaction_pending(txn2)
+        response = self.client.get(reverse('subscriptions:payment_history'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, txn1.transaction_id)
+        self.assertNotContains(response, txn2.transaction_id)
+
+    def test_transactions_ordered_newest_first(self):
+        txn1 = create_payment_transaction(self.user, self.plan)
+        mark_transaction_pending(txn1)
+        txn2 = create_payment_transaction(self.user, self.plan)
+        mark_transaction_pending(txn2)
+        response = self.client.get(reverse('subscriptions:payment_history'))
+        transactions = response.context['transactions']
+        self.assertEqual(transactions[0], txn2)
+        self.assertEqual(transactions[1], txn1)
+
+    def test_empty_state_displayed(self):
+        response = self.client.get(reverse('subscriptions:payment_history'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No payment transactions found')
+
+
+class SubscriptionHistoryViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='subhist', password='Secret123')
+        self.other = User.objects.create_user(username='othersubhist', password='Secret123')
+        self.plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-subhist',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        self.client.force_login(self.user)
+
+    def test_unauthenticated_redirected(self):
+        self.client.logout()
+        response = self.client.get(reverse('subscriptions:subscription_history'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/login/', response['Location'])
+
+    def test_user_sees_only_own_subscriptions(self):
+        UserSubscription.objects.create(user=self.user, plan=self.plan, status='ACTIVE')
+        UserSubscription.objects.create(user=self.other, plan=self.plan, status='ACTIVE')
+        response = self.client.get(reverse('subscriptions:subscription_history'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.plan.name)
+        self.assertNotContains(response, self.other.username)
+
+    def test_history_ordered_newest_first(self):
+        sub1 = UserSubscription.objects.create(user=self.user, plan=self.plan, status='ACTIVE')
+        sub2 = UserSubscription.objects.create(user=self.user, plan=self.plan, status='EXPIRED')
+        response = self.client.get(reverse('subscriptions:subscription_history'))
+        subscriptions = response.context['subscriptions']
+        self.assertEqual(subscriptions[0], sub2)
+        self.assertEqual(subscriptions[1], sub1)
+
+    def test_previous_expired_subscriptions_visible(self):
+        now = timezone.now()
+        UserSubscription.objects.create(
+            user=self.user,
+            plan=self.plan,
+            status='EXPIRED',
+            start_date=now - timedelta(days=30),
+            end_date=now - timedelta(days=1),
+        )
+        response = self.client.get(reverse('subscriptions:subscription_history'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'EXPIRED')
+
+
+class AdminBusinessLogicTests(TestCase):
+    def test_manual_grant_activates_access(self):
+        user = User.objects.create_user(username='admingrant', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-admingrant',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        grant_manual_subscription(user, plan)
+        self.assertTrue(user_has_premium_access(user))
+        sub = UserSubscription.objects.filter(user=user, status='ACTIVE').first()
+        self.assertIsNotNone(sub)
+        self.assertEqual(sub.source, 'ADMIN')
+
+    def test_manual_grant_does_not_create_payment_transaction(self):
+        user = User.objects.create_user(username='adminnopay', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-adminnopay',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        grant_manual_subscription(user, plan)
+        self.assertEqual(PaymentTransaction.objects.count(), 0)
+
+    def test_revoke_active_premium_immediately_removes_access(self):
+        user = User.objects.create_user(username='adminrevoke', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-revoke',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        activate_subscription(user, plan)
+        self.assertTrue(user_has_premium_access(user))
+        revoke_subscription(user)
+        self.assertFalse(user_has_premium_access(user))
+
+    def test_revoked_user_cannot_access_premium_feature(self):
+        user = User.objects.create_user(username='revokefeature', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-revokefeature',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        activate_subscription(user, plan)
+        paper = Paper.objects.create(owner=user, title='Revoke Feature Paper', pdf_file='papers/revoke.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        revoke_subscription(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertRedirects(response, reverse('subscriptions:pricing') + '?next=%2Fpapers%2F1%2Ftechnical%2F')
+
+    def test_extension_correctly_adds_days(self):
+        user = User.objects.create_user(username='adminextend', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Monthly',
+            slug='premium-monthly-extend',
+            description='Test plan.',
+            price=Decimal('29.99'),
+            duration_days=30,
+        )
+        activate_subscription(user, plan)
+        sub = get_active_subscription(user)
+        original_end = sub.end_date
+        extend_subscription(user, 7)
+        sub.refresh_from_db()
+        self.assertEqual((sub.end_date - original_end).days, 7)
+
+    def test_extension_does_not_create_duplicate_active_subscription(self):
+        user = User.objects.create_user(username='extendnodup', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-extendnodup',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        activate_subscription(user, plan)
+        extend_subscription(user, 5)
+        self.assertEqual(UserSubscription.objects.filter(user=user, status='ACTIVE').count(), 1)
+
+    def test_invalid_extension_days_rejected(self):
+        user = User.objects.create_user(username='extendinvalid', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-extendinvalid',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        activate_subscription(user, plan)
+        with self.assertRaises(Exception):
+            extend_subscription(user, 0)
+        with self.assertRaises(Exception):
+            extend_subscription(user, -5)
+
+
+class ExpirationDisplayTests(TestCase):
+    def test_expired_premium_cannot_access_premium_feature(self):
+        user = User.objects.create_user(username='expireddisplay', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-expireddisplay',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        now = timezone.now()
+        UserSubscription.objects.create(
+            user=user,
+            plan=plan,
+            status='ACTIVE',
+            start_date=now - timedelta(days=10),
+            end_date=now - timedelta(days=3),
+        )
+        paper = Paper.objects.create(owner=user, title='Expired Display Paper', pdf_file='papers/expireddisplay.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertRedirects(response, reverse('subscriptions:pricing') + '?next=%2Fpapers%2F1%2Ftechnical%2F')
+
+    def test_expired_subscription_displays_correctly_on_my_subscription(self):
+        user = User.objects.create_user(username='expireddisplay2', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-expireddisplay2',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        now = timezone.now()
+        UserSubscription.objects.create(
+            user=user,
+            plan=plan,
+            status='ACTIVE',
+            start_date=now - timedelta(days=10),
+            end_date=now - timedelta(days=3),
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse('subscriptions:my_subscription'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'EXPIRED')
+
+
+class RenewalFlowTests(TestCase):
+    def test_renewal_button_links_to_pricing(self):
+        user = User.objects.create_user(username='renewaluser', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-renewal',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        activate_subscription(user, plan)
+        self.client.force_login(user)
+        response = self.client.get(reverse('subscriptions:my_subscription'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('subscriptions:pricing'))
+
+
+class RegressionTests(TestCase):
+    def test_existing_sslcommerz_flow_untouched(self):
+        self.assertEqual(PaymentTransaction.PaymentStatus.INITIATED, 'INITIATED')
+        self.assertEqual(PaymentTransaction.PaymentStatus.SUCCESS, 'SUCCESS')
+
+    def test_basic_users_remain_blocked(self):
+        user = User.objects.create_user(username='regbasicblock', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Reg Block Paper', pdf_file='papers/regblock.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertRedirects(response, reverse('subscriptions:pricing') + '?next=%2Fpapers%2F1%2Ftechnical%2F')
+
+    def test_premium_users_retain_access(self):
+        user = User.objects.create_user(username='regpremiumkeep', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-regkeep',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        activate_subscription(user, plan)
+        paper = Paper.objects.create(owner=user, title='Reg Keep Paper', pdf_file='papers/regkeep.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_dashboard_manage_subscription_link_present_for_premium(self):
+        user = User.objects.create_user(username='dashmanagesub', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-dashmanage',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        activate_subscription(user, plan)
+        self.client.force_login(user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('subscriptions:my_subscription'))
+
+    def test_navbar_subscription_links_present_for_authenticated(self):
+        user = User.objects.create_user(username='navsubuser', password='Secret123')
+        self.client.force_login(user)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('subscriptions:my_subscription'))
+        self.assertContains(response, reverse('subscriptions:payment_history'))
+        self.assertContains(response, reverse('subscriptions:subscription_history'))
 

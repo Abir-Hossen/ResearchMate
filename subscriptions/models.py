@@ -104,9 +104,15 @@ class UserSubscription(models.Model):
         ('CANCELLED', 'Cancelled'),
     ]
 
+    SOURCE_CHOICES = [
+        ('PAYMENT', 'Payment'),
+        ('ADMIN', 'Admin'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscriptions')
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name='subscriptions')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='PAYMENT')
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

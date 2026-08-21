@@ -15,6 +15,7 @@
         <strong>{{ subscription_status.plan.name }}</strong>
         <span class="text-muted small"> · Status: {{ subscription_status.status }} · Expires: {{ subscription_status.end_date|date:"M d, Y" }} · {{ subscription_status.days_remaining }} days remaining</span>
     </div>
+    <a href="{% url 'subscriptions:my_subscription' %}" class="btn btn-outline-success btn-sm ms-auto">Manage Subscription</a>
 </div>
 {% else %}
 <div class="alert alert-light d-flex align-items-center justify-content-between gap-3" role="alert">

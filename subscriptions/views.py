@@ -14,11 +14,15 @@ from .models import PaymentTransaction, SubscriptionPlan
 from .services import (
     activate_subscription,
     create_payment_transaction,
+    extend_subscription,
     get_active_subscription,
     get_current_subscription_status,
+    grant_manual_subscription,
     mark_transaction_cancelled,
     mark_transaction_failed,
     mark_transaction_pending,
+    revoke_subscription,
+    user_has_premium_access,
 )
 from .sslcommerz_service import (
     SSLCommerzError,
@@ -173,28 +177,6 @@ def payment_cancel_view(request):
     return render(request, 'subscriptions/payment_return.html', {'outcome': 'cancel'})
 
 
-def _mark_terminal_callback(request, kind):
-    callback_data = request.POST if request.method == 'POST' else request.GET
-    tran_id = callback_data.get('tran_id')
-    if not tran_id:
-        return
-    transaction = PaymentTransaction.objects.filter(transaction_id=tran_id).first()
-    if transaction is None:
-        return
-    if kind == 'fail':
-        if transaction.status in (
-            PaymentTransaction.PaymentStatus.INITIATED,
-            PaymentTransaction.PaymentStatus.PENDING,
-        ):
-            mark_transaction_failed(transaction, reason='Payment failed at gateway.')
-    else:
-        if transaction.status in (
-            PaymentTransaction.PaymentStatus.INITIATED,
-            PaymentTransaction.PaymentStatus.PENDING,
-        ):
-            mark_transaction_cancelled(transaction)
-
-
 @login_required(login_url='login')
 def payment_debug_verify_view(request, transaction_id):
     """Diagnostic view to manually test SSLCOMMERZ validation for a transaction."""
@@ -268,3 +250,58 @@ def payment_debug_verify_view(request, transaction_id):
             lines.append(f'Validation Error: {result["validation_error"]}')
 
     return HttpResponse('<pre>' + '\n'.join(lines) + '</pre>', content_type='text/plain')
+
+
+def _mark_terminal_callback(request, kind):
+    callback_data = request.POST if request.method == 'POST' else request.GET
+    tran_id = callback_data.get('tran_id')
+    if not tran_id:
+        return
+    transaction = PaymentTransaction.objects.filter(transaction_id=tran_id).first()
+    if transaction is None:
+        return
+    if kind == 'fail':
+        if transaction.status in (
+            PaymentTransaction.PaymentStatus.INITIATED,
+            PaymentTransaction.PaymentStatus.PENDING,
+        ):
+            mark_transaction_failed(transaction, reason='Payment failed at gateway.')
+    else:
+        if transaction.status in (
+            PaymentTransaction.PaymentStatus.INITIATED,
+            PaymentTransaction.PaymentStatus.PENDING,
+        ):
+            mark_transaction_cancelled(transaction)
+
+
+@login_required(login_url='login')
+def my_subscription_view(request):
+    user = request.user
+    user_has_premium_access(user)
+    subscription_status = get_current_subscription_status(user)
+    active_subscription = get_active_subscription(user)
+    recent_subscription = user.subscriptions.order_by('-created_at').first()
+    context = {
+        'subscription_status': subscription_status,
+        'active_subscription': active_subscription,
+        'recent_subscription': recent_subscription,
+    }
+    return render(request, 'subscriptions/my_subscription.html', context)
+
+
+@login_required(login_url='login')
+def payment_history_view(request):
+    transactions = request.user.payment_transactions.all().order_by('-created_at')
+    context = {
+        'transactions': transactions,
+    }
+    return render(request, 'subscriptions/payment_history.html', context)
+
+
+@login_required(login_url='login')
+def subscription_history_view(request):
+    subscriptions = request.user.subscriptions.all().order_by('-created_at')
+    context = {
+        'subscriptions': subscriptions,
+    }
+    return render(request, 'subscriptions/subscription_history.html', context)

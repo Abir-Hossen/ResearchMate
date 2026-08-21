@@ -1,0 +1,25 @@
+{% extends 'admin/base_site.html' %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<form method="post">{% csrf_token %}
+    <p>Grant Premium access to the following {{ subscriptions|length }} user(s):</p>
+    <ul>
+        {% for subscription in subscriptions %}
+            <li>{{ subscription.user.username }} ({{ subscription.user.email }})</li>
+        {% endfor %}
+    </ul>
+    <p>Select a plan to grant:</p>
+    <select name="plan" required>
+        <option value="">---------</option>
+        {% for plan in plans %}
+            <option value="{{ plan.pk }}">{{ plan.name }} ({{ plan.duration_days }} days)</option>
+        {% endfor %}
+    </select>
+    <input type="hidden" name="action" value="{{ action }}">
+    <input type="submit" name="apply" value="{% trans 'Grant Premium' %}">
+    <a href="{% url 'admin:subscriptions_usersubscription_changelist' %}">Cancel</a>
+</form>
+{% endblock %}
