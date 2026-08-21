@@ -53,15 +53,18 @@
                     {% endif %}
                     <div class="card-body text-center">
                         <h5 class="text-uppercase text-muted fw-semibold mb-2">{{ plan.name }}</h5>
-                        <div class="display-6 fw-bold mb-1">{{ plan.price|floatformat:2 }}</div>
-                        <p class="text-muted small mb-3">{{ plan.duration_days }}-day access · Payment integration coming next</p>
+                        <div class="display-6 fw-bold mb-1">৳{{ plan.price|floatformat:2 }}</div>
+                        <p class="text-muted small mb-3">{{ plan.duration_days }}-day access · Secure SSLCOMMERZ checkout</p>
                         <ul class="list-unstyled text-start small mb-4">
                             <li class="mb-2">Full access to all AI learning tools</li>
                             <li class="mb-2">Technical explanations</li>
                             <li class="mb-2">Section learning, glossary, and flashcards</li>
                             <li class="mb-2">Quizzes, viva prep, and revision notes</li>
                         </ul>
-                        <button class="btn btn-primary w-100" disabled>Coming Soon</button>
+                        <form method="post" action="{% url 'subscriptions:checkout' plan.slug %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary w-100">Pay ৳{{ plan.price|floatformat:2 }}</button>
+                        </form>
                     </div>
                 </div>
             </div>

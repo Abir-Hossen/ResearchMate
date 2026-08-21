@@ -1,6 +1,7 @@
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from .models import UserSubscription
+from .models import PaymentTransaction, UserSubscription
 
 
 def get_active_subscription(user):
@@ -61,3 +62,62 @@ def activate_subscription(user, plan):
         end_date=now + timezone.timedelta(days=plan.duration_days),
     )
     return subscription
+
+
+def create_payment_transaction(user, plan):
+    if not plan.is_active:
+        raise ValidationError('Cannot create a payment transaction for an inactive subscription plan.')
+
+    transaction = PaymentTransaction.objects.create(
+        user=user,
+        plan=plan,
+        amount=plan.price,
+        currency='BDT',
+        status=PaymentTransaction.PaymentStatus.INITIATED,
+        payment_gateway=PaymentTransaction.PaymentGateway.SSLCOMMERZ,
+    )
+    return transaction
+
+
+def _validate_transition(transaction, new_status):
+    if transaction.status == new_status:
+        raise ValidationError(f'Transaction is already in status {new_status}.')
+    if not transaction.can_transition_to(new_status):
+        raise ValidationError(
+            f'Invalid payment status transition from {transaction.status} to {new_status}.'
+        )
+
+
+def mark_transaction_pending(transaction):
+    _validate_transition(transaction, PaymentTransaction.PaymentStatus.PENDING)
+    transaction.status = PaymentTransaction.PaymentStatus.PENDING
+    transaction.save(update_fields=['status', 'updated_at'])
+    return transaction
+
+
+def mark_transaction_success_for_testing(transaction):
+    _validate_transition(transaction, PaymentTransaction.PaymentStatus.SUCCESS)
+    now = timezone.now()
+    transaction.status = PaymentTransaction.PaymentStatus.SUCCESS
+    transaction.completed_at = now
+    transaction.verified_at = now
+    transaction.save(update_fields=['status', 'completed_at', 'verified_at', 'updated_at'])
+    return transaction
+
+
+def mark_transaction_failed(transaction, reason=None):
+    _validate_transition(transaction, PaymentTransaction.PaymentStatus.FAILED)
+    transaction.status = PaymentTransaction.PaymentStatus.FAILED
+    transaction.completed_at = timezone.now()
+    if reason is not None:
+        transaction.failure_reason = reason
+    transaction.save(update_fields=['status', 'completed_at', 'failure_reason', 'updated_at'])
+    return transaction
+
+
+def mark_transaction_cancelled(transaction):
+    _validate_transition(transaction, PaymentTransaction.PaymentStatus.CANCELLED)
+    transaction.status = PaymentTransaction.PaymentStatus.CANCELLED
+    transaction.completed_at = timezone.now()
+    transaction.save(update_fields=['status', 'completed_at', 'updated_at'])
+    return transaction
