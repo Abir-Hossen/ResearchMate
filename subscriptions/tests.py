@@ -24,7 +24,12 @@ from .services import (
     mark_transaction_success_for_testing,
     user_has_premium_access,
 )
-from .sslcommerz_service import SSLCommerzError, initiate_sslcommerz_payment
+from .sslcommerz_service import (
+    SSLCommerzError,
+    initiate_sslcommerz_payment,
+    verify_and_complete_payment,
+    verify_sslcommerz_payment,
+)
 
 
 def make_gateway_response(json_data, text='', status=200):
@@ -34,6 +39,19 @@ def make_gateway_response(json_data, text='', status=200):
     response.text = text
     response.raise_for_status.return_value = None
     return response
+
+
+def make_verification_response(transaction, status='VALID', amount=None, currency=None,
+                                tran_id=None, val_id=None):
+    return {
+        'status': status,
+        'tran_id': tran_id if tran_id is not None else transaction.transaction_id,
+        'val_id': val_id if val_id is not None else 'VAL-' + transaction.transaction_id,
+        'amount': amount if amount is not None else str(transaction.amount),
+        'currency': currency if currency is not None else transaction.currency,
+        'card_type': 'VISA',
+        'bank_tran_id': 'BANK123',
+    }
 
 
 class SubscriptionPlanTests(TestCase):
@@ -799,11 +817,13 @@ class SSLCommerzServiceTests(TestCase):
 
     def test_sandbox_configuration_is_used(self):
         with self.settings(SSLCOMMERZ_SANDBOX=False):
-            from subscriptions.sslcommerz_service import get_api_endpoint
+            from subscriptions.sslcommerz_service import get_api_endpoint, get_validation_endpoint
             self.assertEqual(get_api_endpoint(), 'https://securepay.sslcommerz.com/gwprocess/v4/api.php')
+            self.assertEqual(get_validation_endpoint(), 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php')
         with self.settings(SSLCOMMERZ_SANDBOX=True):
-            from subscriptions.sslcommerz_service import get_api_endpoint
+            from subscriptions.sslcommerz_service import get_api_endpoint, get_validation_endpoint
             self.assertEqual(get_api_endpoint(), 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php')
+            self.assertEqual(get_validation_endpoint(), 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php')
 
     @patch('subscriptions.sslcommerz_service.requests.post')
     def test_successful_initiation_returns_gateway_url(self, mock_post):
@@ -1090,4 +1110,377 @@ class CheckoutMissingCredentialsTests(TestCase):
             self.client.login(username='missingcred', password='Secret123')
             self.client.post(reverse('subscriptions:checkout', args=['premium-weekly']))
         self.assertFalse(user_has_premium_access(self.user))
+
+
+class PaymentVerificationServiceTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='verifyuser', email='verify@example.com', password='Secret123')
+        self.plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-verify',
+            description='Test plan.',
+            price=Decimal('99.00'),
+            duration_days=7,
+            is_active=True,
+        )
+
+    def _pending_transaction(self):
+        transaction = create_payment_transaction(self.user, self.plan)
+        mark_transaction_pending(transaction)
+        return transaction
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_valid_verification_passes(self, mock_get):
+        transaction = self._pending_transaction()
+        mock_get.return_value = make_gateway_response(make_verification_response(transaction))
+        data = verify_sslcommerz_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+        self.assertEqual(data['status'], 'VALID')
+        args, kwargs = mock_get.call_args
+        self.assertEqual(args[0], 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php')
+        self.assertEqual(kwargs['params']['val_id'], 'VAL-' + transaction.transaction_id)
+        self.assertEqual(kwargs['params']['format'], 'json')
+        self.assertEqual(kwargs['params']['v'], '1')
+        self.assertNotIn('tran_id', kwargs['params'])
+
+    @override_settings(SSLCOMMERZ_STORE_ID='', SSLCOMMERZ_STORE_PASSWORD='')
+    def test_missing_config_raises(self):
+        transaction = self._pending_transaction()
+        with self.assertRaises(SSLCommerzError):
+            verify_sslcommerz_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_invalid_status_rejected(self, mock_post):
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction, status='FAILED'))
+        with self.assertRaises(SSLCommerzError):
+            verify_sslcommerz_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_validated_status_accepted(self, mock_post):
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction, status='VALIDATED'))
+        data = verify_sslcommerz_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+        self.assertEqual(data['status'], 'VALIDATED')
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_missing_val_id_raises(self, mock_post):
+        transaction = self._pending_transaction()
+        with self.assertRaises(SSLCommerzError):
+            verify_sslcommerz_payment(transaction)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_amount_mismatch_rejected(self, mock_post):
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(
+            make_verification_response(transaction, amount='1.00')
+        )
+        with self.assertRaises(SSLCommerzError):
+            verify_sslcommerz_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_currency_mismatch_rejected(self, mock_post):
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(
+            make_verification_response(transaction, currency='USD')
+        )
+        with self.assertRaises(SSLCommerzError):
+            verify_sslcommerz_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_tran_id_mismatch_rejected(self, mock_post):
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(
+            make_verification_response(transaction, tran_id='RM-20990101-DIFFERENT')
+        )
+        with self.assertRaises(SSLCommerzError):
+            verify_sslcommerz_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_successful_verification_activates_premium_and_marks_success(self, mock_post):
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        result = verify_and_complete_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+        self.assertEqual(result.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertIsNotNone(transaction.verified_at)
+        self.assertIsNotNone(transaction.completed_at)
+        self.assertTrue(user_has_premium_access(self.user))
+        subscription = get_active_subscription(self.user)
+        self.assertEqual(subscription.plan, self.plan)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_val_id_extracted_from_callback_data(self, mock_post):
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        callback_data = {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id}
+        verify_and_complete_payment(transaction, callback_data=callback_data)
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertEqual(transaction.gateway_transaction_id, 'VAL-' + transaction.transaction_id)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_idempotent_activation_on_repeat(self, mock_post):
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        verify_and_complete_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+        verify_and_complete_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+        self.assertEqual(
+            UserSubscription.objects.filter(user=self.user, status='ACTIVE').count(), 1
+        )
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    @patch('subscriptions.sslcommerz_service.activate_subscription')
+    def test_atomic_failure_does_not_leave_success(self, mock_activate, mock_post):
+        mock_activate.side_effect = RuntimeError('activation boom')
+        transaction = self._pending_transaction()
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        with self.assertRaises(SSLCommerzError):
+            verify_and_complete_payment(transaction, val_id='VAL-' + transaction.transaction_id)
+        transaction.refresh_from_db()
+        self.assertNotEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertEqual(UserSubscription.objects.filter(user=self.user).count(), 0)
+
+
+class PaymentVerificationViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='payverify', email='payverify@example.com', password='Secret123')
+        self.weekly = SubscriptionPlan.objects.get(slug='premium-weekly')
+        self.monthly = SubscriptionPlan.objects.get(slug='premium-monthly')
+
+    def _pending_transaction(self, plan):
+        transaction = create_payment_transaction(self.user, plan)
+        mark_transaction_pending(transaction)
+        return transaction
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_successful_verified_payment_activates_premium(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        response = self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        self.assertEqual(response.status_code, 200)
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertTrue(user_has_premium_access(self.user))
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_weekly_grants_seven_day_access(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        subscription = get_active_subscription(self.user)
+        self.assertEqual(subscription.plan, self.weekly)
+        self.assertEqual((subscription.end_date - subscription.start_date).days, 7)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_monthly_grants_thirty_day_access(self, mock_post):
+        transaction = self._pending_transaction(self.monthly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        subscription = get_active_subscription(self.user)
+        self.assertEqual(subscription.plan, self.monthly)
+        self.assertEqual((subscription.end_date - subscription.start_date).days, 30)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_invalid_verification_does_not_activate(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction, status='INVALID'))
+        response = self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        self.assertEqual(response.status_code, 200)
+        transaction.refresh_from_db()
+        self.assertNotEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertFalse(user_has_premium_access(self.user))
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_amount_mismatch_no_activation(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction, amount='0.01'))
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        transaction.refresh_from_db()
+        self.assertNotEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertFalse(user_has_premium_access(self.user))
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_currency_mismatch_no_activation(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction, currency='USD'))
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        transaction.refresh_from_db()
+        self.assertNotEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertFalse(user_has_premium_access(self.user))
+
+    def test_unknown_transaction_id_safe_response(self):
+        response = self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': 'RM-20990101-DOESNOTEXIST'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(UserSubscription.objects.count(), 0)
+
+    def test_missing_transaction_id_safe_response(self):
+        response = self.client.post(reverse('subscriptions:payment_success'), {})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(UserSubscription.objects.count(), 0)
+
+    def test_manual_get_visit_does_not_activate(self):
+        response = self.client.get(reverse('subscriptions:payment_success'))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(user_has_premium_access(self.user))
+        self.assertEqual(UserSubscription.objects.count(), 0)
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_duplicate_success_callback_single_activation(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        self.assertEqual(
+            UserSubscription.objects.filter(user=self.user, status='ACTIVE').count(), 1
+        )
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_existing_success_transaction_no_reactivation(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mark_transaction_success_for_testing(transaction)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        self.assertEqual(UserSubscription.objects.filter(user=self.user).count(), 0)
+        self.assertFalse(user_has_premium_access(self.user))
+
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_failed_payment_marks_failed_and_basic(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        response = self.client.post(reverse('subscriptions:payment_fail'), {'tran_id': transaction.transaction_id})
+        self.assertEqual(response.status_code, 200)
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.FAILED)
+        self.assertFalse(user_has_premium_access(self.user))
+
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_cancelled_payment_marks_cancelled_and_basic(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        response = self.client.post(reverse('subscriptions:payment_cancel'), {'tran_id': transaction.transaction_id})
+        self.assertEqual(response.status_code, 200)
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.CANCELLED)
+        self.assertFalse(user_has_premium_access(self.user))
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_existing_premium_user_new_plan_uses_activation_logic(self, mock_post):
+        activate_subscription(self.user, self.weekly)
+        self.assertTrue(user_has_premium_access(self.user))
+        transaction = self._pending_transaction(self.monthly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        active = get_active_subscription(self.user)
+        self.assertEqual(active.plan, self.monthly)
+        self.assertTrue(user_has_premium_access(self.user))
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_callback_cannot_select_another_user_or_plan(self, mock_post):
+        other_user = User.objects.create_user(username='otherpay', password='Secret123')
+        transaction = self._pending_transaction(self.weekly)
+        callback_data = {
+            'tran_id': transaction.transaction_id,
+            'val_id': 'VAL-' + transaction.transaction_id,
+            'username': other_user.username,
+            'plan': 'premium-monthly',
+        }
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction))
+        self.client.post(reverse('subscriptions:payment_success'), callback_data)
+        subscription = get_active_subscription(self.user)
+        self.assertEqual(subscription.user, self.user)
+        self.assertEqual(subscription.plan, self.weekly)
+        self.assertFalse(user_has_premium_access(other_user))
+
+    def test_missing_val_id_in_callback_does_not_activate(self):
+        transaction = self._pending_transaction(self.weekly)
+        response = self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id},
+        )
+        self.assertEqual(response.status_code, 200)
+        transaction.refresh_from_db()
+        self.assertNotEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertFalse(user_has_premium_access(self.user))
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_validated_status_activates_premium(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mock_post.return_value = make_gateway_response(make_verification_response(transaction, status='VALIDATED'))
+        self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.SUCCESS)
+        self.assertTrue(user_has_premium_access(self.user))
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_validation_network_error_keeps_pending(self, mock_post):
+        transaction = self._pending_transaction(self.weekly)
+        mock_post.side_effect = requests.exceptions.ConnectionError('boom')
+        response = self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        self.assertEqual(response.status_code, 200)
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.PENDING)
+        self.assertFalse(user_has_premium_access(self.user))
+        self.assertNotEqual(transaction.failure_reason, '')
 

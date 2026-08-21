@@ -5,25 +5,40 @@
     <div class="col-lg-6">
         <div class="card text-center mt-5">
             <div class="card-body">
-                {% if outcome == 'success' %}
+                {% if outcome == 'success' and activated %}
+                    <div class="mb-3 text-success" style="font-size: 2.75rem; line-height: 1;">&#10003;</div>
+                    <h3 class="mb-3">Payment Successful</h3>
+                    <p class="text-muted">Your Premium subscription is now active.</p>
+                    <ul class="list-unstyled text-start small mb-4 d-inline-block">
+                        <li><strong>Plan:</strong> {{ plan_name }}</li>
+                        <li><strong>Access:</strong> All Premium AI learning features</li>
+                        {% if expires_date %}<li><strong>Subscription expires:</strong> {{ expires_date|date:"M d, Y" }}</li>{% endif %}
+                    </ul>
+                    <div class="d-grid gap-2 col-10 mx-auto">
+                        <a href="{% url 'dashboard' %}" class="btn btn-primary">Go to Learning Dashboard</a>
+                        <a href="{% url 'my_papers' %}" class="btn btn-outline-secondary">Continue to My Papers</a>
+                    </div>
+                {% elif outcome == 'success' %}
                     <h3 class="mb-3">Payment Received</h3>
                     <p class="text-muted">
                         Thank you. Your payment is being securely verified by our server.
                         Premium access will be activated automatically once verification completes.
                     </p>
+                    <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary mt-3">Back to Plans</a>
                 {% elif outcome == 'fail' %}
                     <h3 class="mb-3">Payment Failed</h3>
                     <p class="text-muted">
-                        Your payment could not be completed. No charges have been applied to your account
-                        and no subscription has been activated. Please try again.
+                        We could not verify your payment. No charges have been applied and no subscription
+                        has been activated. If any amount was deducted, please contact support.
                     </p>
+                    <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary mt-3">Back to Plans</a>
                 {% elif outcome == 'cancel' %}
                     <h3 class="mb-3">Payment Cancelled</h3>
                     <p class="text-muted">
                         You cancelled the payment. No subscription has been activated.
                     </p>
+                    <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary mt-3">Back to Plans</a>
                 {% endif %}
-                <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary mt-3">Back to Plans</a>
             </div>
         </div>
     </div>
