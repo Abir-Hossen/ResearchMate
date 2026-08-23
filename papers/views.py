@@ -37,6 +37,7 @@ from .utils import format_file_size
 from django.http import HttpResponse
 from django.conf import settings
 from .groq_connectivity import GroqLearningService
+from subscriptions.decorators import premium_required
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +198,7 @@ def paper_beginner(request, paper_id):
 
 
 @login_required(login_url='login')
+@premium_required
 def paper_technical(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
 
@@ -214,6 +216,7 @@ def paper_technical(request, paper_id):
 
 
 @login_required(login_url='login')
+@premium_required
 def paper_sections(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
 
@@ -231,6 +234,7 @@ def paper_sections(request, paper_id):
 
 
 @login_required(login_url='login')
+@premium_required
 def paper_glossary(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
 
@@ -248,6 +252,7 @@ def paper_glossary(request, paper_id):
 
 
 @login_required(login_url='login')
+@premium_required
 def paper_flashcards(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
 
@@ -265,6 +270,7 @@ def paper_flashcards(request, paper_id):
 
 
 @login_required(login_url='login')
+@premium_required
 def paper_quiz(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
     quiz_questions = list(paper.quiz_questions.all().order_by('display_order', 'id'))
@@ -346,6 +352,7 @@ def paper_quiz(request, paper_id):
 
 
 @login_required(login_url='login')
+@premium_required
 def paper_viva(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
 
@@ -371,6 +378,7 @@ def paper_viva(request, paper_id):
 
 
 @login_required(login_url='login')
+@premium_required
 def paper_notes(request, paper_id):
     paper = get_user_paper(request.user, paper_id)
 

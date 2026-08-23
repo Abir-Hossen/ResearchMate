@@ -42,7 +42,8 @@ def load_env_file(env_file=None):
             key, val = line.split('=', 1)
             key = key.strip()
             val = val.strip().strip('"').strip("'")
-            if key in {'GROQ_API_KEY', 'GROQ_MODEL', 'AI_PROVIDER'} or key not in os.environ:
+            sslcommerz_keys = {'SSLCOMMERZ_STORE_ID', 'SSLCOMMERZ_STORE_PASSWORD', 'SSLCOMMERZ_SANDBOX', 'SSLCOMMERZ_SUCCESS_URL', 'SSLCOMMERZ_FAIL_URL', 'SSLCOMMERZ_CANCEL_URL'}
+            if key in {'GROQ_API_KEY', 'GROQ_MODEL', 'AI_PROVIDER'} | sslcommerz_keys or key not in os.environ:
                 os.environ[key] = val
     except Exception:
         refresh_settings_from_env()
@@ -60,6 +61,23 @@ load_env_file()
 
 # Expose Groq settings in settings for easy access by services.
 refresh_settings_from_env()
+
+
+# SSLCOMMERZ payment gateway configuration (development / sandbox).
+# Credentials are read from the environment / local .env file and are never
+# hardcoded. Real payment verification happens server-side in a later phase.
+SSLCOMMERZ_STORE_ID = os.environ.get('SSLCOMMERZ_STORE_ID', '')
+SSLCOMMERZ_STORE_PASSWORD = os.environ.get('SSLCOMMERZ_STORE_PASSWORD', '')
+SSLCOMMERZ_SANDBOX = os.environ.get('SSLCOMMERZ_SANDBOX', 'True').strip().lower() in ('1', 'true', 'yes', 'on')
+SSLCOMMERZ_SUCCESS_URL = os.environ.get(
+    'SSLCOMMERZ_SUCCESS_URL', 'http://localhost:8000/subscriptions/payment/success/'
+)
+SSLCOMMERZ_FAIL_URL = os.environ.get(
+    'SSLCOMMERZ_FAIL_URL', 'http://localhost:8000/subscriptions/payment/fail/'
+)
+SSLCOMMERZ_CANCEL_URL = os.environ.get(
+    'SSLCOMMERZ_CANCEL_URL', 'http://localhost:8000/subscriptions/payment/cancel/'
+)
 
 
 # Quick-start development settings - unsuitable for production
@@ -89,6 +107,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'accounts',
     'papers',
+    'subscriptions',
 ]
 
 MIDDLEWARE = [
@@ -156,7 +175,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Dhaka'
 
 USE_I18N = True
 

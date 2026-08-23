@@ -241,9 +241,10 @@ class AuthenticationFlowTests(TestCase):
         self.assertRedirects(response, reverse('dashboard'))
         self.assertTrue(response.wsgi_request.user.is_authenticated)
 
-    def test_home_redirects_guests_to_login_and_users_to_dashboard(self):
+    def test_home_redirects_authenticated_users_to_dashboard_and_shows_landing_page_for_guests(self):
         response = self.client.get(reverse('home'))
-        self.assertRedirects(response, reverse('login'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Understand Research Papers Smarter with AI')
 
         user = User.objects.create_user(username='homeuser', email='homeuser@example.com', password='Secret123')
         self.client.force_login(user)
@@ -275,3 +276,40 @@ class AuthenticationFlowTests(TestCase):
         user.refresh_from_db()
         self.assertTrue(user.check_password('NewStrong123'))
         self.assertContains(response, 'Password changed successfully')
+
+
+class LandingFlowTests(TestCase):
+    def test_anonymous_landing_premium_button_uses_login_next(self):
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'accounts/login')
+        self.assertContains(response, 'next=/subscriptions/pricing/')
+
+    def test_authenticated_landing_premium_button_redirects_to_pricing(self):
+        from django.template.loader import render_to_string
+        from django.test import RequestFactory
+
+        user = User.objects.create_user(username='landingauth', password='Secret123')
+        request = RequestFactory().get('/')
+        request.user = user
+        html = render_to_string('landing.html', {}, request=request)
+        self.assertIn('href="/subscriptions/pricing/"', html)
+        self.assertNotIn('accounts/login/?next', html)
+
+
+class LoginNextTests(TestCase):
+    def test_login_with_next_redirects_safely_to_pricing(self):
+        User.objects.create_user(username='nextuser', password='Secret123')
+        response = self.client.post(
+            reverse('login'),
+            {'username': 'nextuser', 'password': 'Secret123', 'next': '/subscriptions/pricing/'},
+        )
+        self.assertRedirects(response, '/subscriptions/pricing/')
+
+    def test_login_rejects_unsafe_external_next(self):
+        User.objects.create_user(username='unsafenext', password='Secret123')
+        response = self.client.post(
+            reverse('login'),
+            {'username': 'unsafenext', 'password': 'Secret123', 'next': 'https://evil.example.com'},
+        )
+        self.assertRedirects(response, reverse('dashboard'))

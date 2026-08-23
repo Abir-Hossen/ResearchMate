@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <p class="section-label mb-2">Subscription</p>
+        <h2 class="h3 mb-0">My Subscription</h2>
+    </div>
+</div>
+
+{% if subscription_status.has_premium and active_subscription %}
+    {% if subscription_status.status == 'ACTIVE' %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3 class="h5 mb-3">Current Plan</h3>
+            <p class="mb-1"><strong>Plan:</strong> {{ active_subscription.plan.name }}</p>
+            <p class="mb-1"><strong>Status:</strong> <span class="badge bg-success">{{ subscription_status.status }}</span></p>
+            <p class="mb-1"><strong>Subscription Start Date:</strong> {{ active_subscription.start_date|date:"M d, Y" }}</p>
+            <p class="mb-1"><strong>Subscription Expiry Date:</strong> {{ active_subscription.end_date|date:"M d, Y" }}</p>
+            <p class="mb-1"><strong>Days Remaining:</strong> {{ subscription_status.days_remaining }} days remaining</p>
+            <p class="mb-3"><strong>Premium Access:</strong> <span class="text-success">Active</span></p>
+            <div class="d-flex gap-2">
+                <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary btn-sm">Renew Premium</a>
+                <a href="{% url 'subscriptions:payment_history' %}" class="btn btn-outline-secondary btn-sm">View Payment History</a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning" role="alert">
+        <h4 class="alert-heading h6">Premium Plan: {{ subscription_status.status }}</h4>
+        <p>Your Premium access has expired.</p>
+        <hr>
+        <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary btn-sm">Renew Premium</a>
+    </div>
+    {% endif %}
+{% else %}
+    {% if recent_subscription and recent_subscription.status == 'EXPIRED' %}
+    <div class="alert alert-warning" role="alert">
+        <h4 class="alert-heading h6">Premium Plan: Expired</h4>
+        <p>Status: EXPIRED</p>
+        <p>Your Premium access has expired.</p>
+        <hr>
+        <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary btn-sm">Renew Premium</a>
+    </div>
+    {% elif recent_subscription and recent_subscription.status == 'CANCELLED' %}
+    <div class="alert alert-warning" role="alert">
+        <h4 class="alert-heading h6">Status: CANCELLED</h4>
+        <p>Premium access: Inactive</p>
+        <hr>
+        <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary btn-sm">Subscribe Again</a>
+    </div>
+    {% else %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3 class="h5 mb-3">Current Plan</h3>
+            <p class="mb-1"><strong>Plan:</strong> Basic</p>
+            <p class="mb-1"><strong>Access:</strong> Beginner Explanation</p>
+            <p class="mb-3"><strong>Premium Status:</strong> <span class="text-muted">Not Active</span></p>
+            <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary btn-sm">Upgrade to Premium</a>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+{% endblock %}

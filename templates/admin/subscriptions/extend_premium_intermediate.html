@@ -1,0 +1,20 @@
+{% extends 'admin/base_site.html' %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<form method="post">{% csrf_token %}
+    <p>Extend Premium access for the following {{ subscriptions|length }} subscription(s):</p>
+    <ul>
+        {% for subscription in subscriptions %}
+            <li>{{ subscription.user.username }} — {{ subscription.plan.name }} (ends {{ subscription.end_date|date:"M d, Y" }})</li>
+        {% endfor %}
+    </ul>
+    <p>Additional days to add:</p>
+    <input type="number" name="days" min="1" value="7" required>
+    <input type="hidden" name="action" value="{{ action }}">
+    <input type="submit" name="apply" value="{% trans 'Extend' %}">
+    <a href="{% url 'admin:subscriptions_usersubscription_changelist' %}">Cancel</a>
+</form>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <p class="section-label mb-2">History</p>
+        <h2 class="h3 mb-0">Subscription History</h2>
+    </div>
+</div>
+
+{% if subscriptions %}
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Plan</th>
+                        <th>Status</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Duration</th>
+                        <th>Created Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sub in subscriptions %}
+                    <tr>
+                        <td>{{ sub.plan.name }}</td>
+                        <td><span class="badge bg-{% if sub.status == 'ACTIVE' %}success{% elif sub.status == 'EXPIRED' %}warning{% elif sub.status == 'CANCELLED' %}secondary{% else %}info{% endif %}">{{ sub.status }}</span></td>
+                        <td>{{ sub.start_date|date:"M d, Y"|default:"—" }}</td>
+                        <td>{{ sub.end_date|date:"M d, Y"|default:"—" }}</td>
+                        <td>
+                            {% if sub.start_date and sub.end_date %}
+                                {{ sub.end_date|date:"M d, Y" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>{{ sub.created_at|date:"M d, Y" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="empty-state">
+    <h3 class="h5 mb-3">No subscription history found.</h3>
+    <p class="muted-copy mb-3">You have not subscribed to any plans yet.</p>
+    <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary btn-sm">View Premium Plans</a>
+</div>
+{% endif %}
+{% endblock %}

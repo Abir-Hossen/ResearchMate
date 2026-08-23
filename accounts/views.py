@@ -5,8 +5,10 @@ from django.contrib.auth import authenticate, login, logout, update_session_auth
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.shortcuts import redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from papers.dashboard_service import get_dashboard_data
+from subscriptions.services import get_current_subscription_status
 
 from .forms import LoginForm, PasswordChangeForm, RegistrationForm
 
@@ -14,7 +16,7 @@ from .forms import LoginForm, PasswordChangeForm, RegistrationForm
 def home_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
-    return redirect('login')
+    return render(request, 'landing.html')
 
 
 def register_view(request):
@@ -49,6 +51,9 @@ def login_view(request):
             if user is not None:
                 login(request, user)
                 messages.success(request, 'Welcome back!')
+                next_url = request.POST.get('next') or request.GET.get('next') or ''
+                if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                    return redirect(next_url)
                 return redirect('dashboard')
             messages.error(request, 'Invalid username or password.')
     else:
@@ -69,6 +74,7 @@ def dashboard_view(request):
     context.update({
         'user': request.user,
         'today': datetime.date.today(),
+        'subscription_status': get_current_subscription_status(request.user),
     })
     return render(request, 'accounts/dashboard.html', context)
 
