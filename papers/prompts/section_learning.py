@@ -1,10 +1,14 @@
-def _compact_section_text(section_text, max_chars=6000):
+﻿import re
+
+
+def _compact_section_text(section_text, max_chars=4000):
+    """Compact paper text to stay within token limits while preserving content."""
     if not section_text:
         return ''
 
-    cleaned = ' '.join((section_text or '').split())
+    cleaned = re.sub(r'\n{3,}', '\n\n', section_text)
     if len(cleaned) <= max_chars:
-        return cleaned
+        return cleaned.strip()
 
     truncated = cleaned[:max_chars]
     if ' ' in truncated:
@@ -12,77 +16,73 @@ def _compact_section_text(section_text, max_chars=6000):
     return truncated + ' [truncated]'
 
 
-def build_section_learning_prompt(section_title, section_text=None):
-    if section_text is None:
-        return f"""You are a reading tutor for a research paper.
+def build_section_learning_prompt(extracted_text, paper_context=None):
+    """Build a prompt for fixed-section paper explanation generation."""
+    if not extracted_text:
+        return ''
 
-Analyze the paper text below and identify every major section that should be explained to a student.
+    compact_text = _compact_section_text(extracted_text)
+    return f"""You are an expert academic reading tutor. Analyze the research paper text below and explain the following 6 sections.
 
-Paper text:
-{section_title}
+REQUIRED SECTIONS:
+1. Abstract
+2. Introduction
+3. Related Work
+4. Methodology
+5. Results and Discussion
+6. Conclusion
 
-Return ONLY valid JSON with this schema:
+For each section, write exactly ONE concise explanation of 80-120 words.
+Every explanation MUST reference specific content from the paper (methods, datasets, results, claims, numbers, technical details).
+Do NOT write generic academic filler.
+
+If a section does not exist in the paper, write "This section is not present in the paper." for that section only.
+
+OUTPUT FORMAT - Return ONLY valid JSON:
 {{
   "sections": [
     {{
-      "title": "Section Name",
-      "order": 1
+      "title": "Abstract",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Introduction",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Related Work",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Methodology",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Results and Discussion",
+      "explanation": "80-120 word paper-specific explanation."
+    }},
+    {{
+      "title": "Conclusion",
+      "explanation": "80-120 word paper-specific explanation."
     }}
   ]
 }}
 
-When you later explain a section, use this schema:
-{{
-  "summary": "A concise explanation",
-  "purpose": "Why this section exists",
-  "key_points": ["..."],
-  "important_terms": ["..."],
-  "student_note": "What the student should understand"
-}}
+RULES:
+- Return exactly 6 sections in the order shown above.
+- Do NOT include markdown, code fences, or any text outside the JSON.
+- Do NOT invent facts not supported by the paper text.
 
-Rules:
-- Do not stop after Introduction or Related Work.
-- cover the full paper
-- Use short, clear section titles.
-- Return valid JSON only.
-"""
-
-    compact_text = _compact_section_text(section_text)
-    return f"""You are a reading tutor for a research paper.
-
-Explain only the section below. Do not summarize the whole paper.
-
-Section title:
-{section_title}
-
-Section text:
+Paper text:
 {compact_text}
-
-Return ONLY valid JSON with this schema:
-{{
-  "summary": "A detailed but concise explanation of what the section says and why it matters",
-  "purpose": "Why this section exists in the paper and what role it plays for the reader",
-  "conclusion": "A short closing takeaway that reinforces the main point of the section",
-  "key_points": ["A specific insight from the section", "A second specific insight from the section", "A third specific insight from the section"],
-  "important_terms": ["A technical or domain-specific term from the section"],
-  "student_note": "What the student should understand after reading this section"
-}}
-
-Rules:
-- Do not copy text from the paper.
-- Do not write generic explanations.
-- Make the explanation specific to this section only.
-- Include concrete details whenever the section mentions methods, architecture, datasets, experiments, metrics, findings, limitations, or conclusions.
-- For methodology sections, mention the approach, components, workflow, or design choice.
-- For results/discussion sections, mention observed outcomes, evidence, metrics, limitations, or comparison points if they appear in the text.
-- Keep the answer concise but substantive.
-- Return valid JSON only.
 """
 
 
 def get_section_detection_prompt(extracted_text):
+    """Build section detection prompt (legacy support for compatibility)."""
     return build_section_learning_prompt(extracted_text)
 
 
-def get_single_section_explanation_prompt(section_title, section_text):
-    return build_section_learning_prompt(section_title, section_text)
+def get_single_section_explanation_prompt(section_title, section_text, paper_context=None):
+    """Build single-section explanation prompt."""
+    return build_section_learning_prompt(section_text, paper_context=paper_context)

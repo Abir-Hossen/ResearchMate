@@ -1,3 +1,4 @@
+import logging
 import re
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -8,9 +9,36 @@ from .models import LearningProgress, PaperContent, VivaQuestion
 from .provider_factory import ProviderFactory
 from .response_validator import validate_json_response
 
+logger = logging.getLogger(__name__)
+
 
 class VivaGenerationError(ValueError):
     """Raised when viva question generation fails."""
+
+
+def _repair_viva_json(text):
+    if not isinstance(text, str):
+        return text
+
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r'^```\w*\n?', '', text)
+    if text.endswith("```"):
+        text = re.sub(r'\n?```$', '', text)
+
+    text = "".join(char for char in text if char >= " " or char in "\n\r\t")
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        text = text[start:end + 1]
+
+    text = text.replace("\n", "\n").replace("\r", "\r").replace("\t", "\t")
+    text = re.sub(r'"\s*\n\s*"', " ", text)
+    text = re.sub(r'"\s*\r\s*"', " ", text)
+    text = re.sub(r'"\s*\t\s*"', " ", text)
+
+    return text
 
 
 def _normalize_answers(value):
@@ -80,7 +108,10 @@ def generate_viva_questions(paper):
 
     valid, payload, error_message = validate_json_response(raw_response)
     if not valid:
-        raise VivaGenerationError(f'The AI provider returned an invalid JSON response: {error_message}')
+        repaired = _repair_viva_json(raw_response)
+        valid, payload, error_message = validate_json_response(repaired)
+        if not valid:
+            raise VivaGenerationError(f'The AI provider returned an invalid JSON response: {error_message}')
 
     raw_questions = payload.get('viva_questions')
     if not isinstance(raw_questions, list):

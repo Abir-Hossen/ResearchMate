@@ -122,7 +122,7 @@ def _clean_technical_markdown(raw_response):
 
     cleaned = technical_explanation.strip()
     word_count = _word_count(cleaned)
-    if word_count < 500 or word_count > 800:
+    if word_count < 500 or word_count > 700:
         return None
 
     return cleaned
@@ -165,9 +165,9 @@ def generate_technical_explanation(paper, force_refresh=False):
         try:
             raw_response = ai_service.generate_feature('technical', cleaned_text)
             technical_explanation = _clean_technical_markdown(raw_response)
-            if technical_explanation is None:
-                raise TechnicalExplanationError('Technical explanation was too short. Requesting a fresh provider response.')
-            break
+            if technical_explanation is not None:
+                break
+            raise TechnicalExplanationError('Technical explanation length was outside the accepted paper-specific range.')
         except TechnicalExplanationError as exc:
             last_error = exc
             if attempt == 0:
@@ -180,19 +180,19 @@ def generate_technical_explanation(paper, force_refresh=False):
         except Exception as exc:
             last_error = TechnicalExplanationError('Technical explanation generation failed. Please try again later.')
             if attempt == 0:
+                analysis.analysis_status = 'Processing'
+                analysis.analysis_error = str(last_error)
+                analysis.last_updated = timezone.now()
+                analysis.save(update_fields=['analysis_status', 'analysis_error', 'last_updated'])
                 continue
             break
 
     if technical_explanation is None:
-        technical_explanation = _build_fallback_technical_explanation(content.extracted_text)
-        analysis.analysis_status = 'Ready'
-        analysis.analysis_error = ''
-        analysis.technical_explanation = technical_explanation
-        analysis.ai_model = getattr(provider, 'model_name', None) or analysis.ai_model or 'groq'
-        analysis.generated_at = analysis.generated_at or timezone.now()
+        analysis.analysis_status = 'Failed'
+        analysis.analysis_error = str(last_error or 'Technical explanation generation failed. Please try again later.')
         analysis.last_updated = timezone.now()
-        analysis.save(update_fields=['technical_explanation', 'analysis_status', 'analysis_error', 'ai_model', 'generated_at', 'last_updated'])
-        return technical_explanation
+        analysis.save(update_fields=['analysis_status', 'analysis_error', 'last_updated'])
+        raise TechnicalExplanationError(str(last_error or 'Technical explanation generation failed. Please try again later.'))
 
     analysis.technical_explanation = technical_explanation
     analysis.analysis_status = 'Ready'

@@ -23,18 +23,31 @@ def render_beginner_markdown(content):
     paragraph_buffer = []
     list_buffer = []
 
+    def _escape(text):
+        return (
+            text.replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;')
+        )
+
+    def _format_inline(text):
+        text = _escape(text)
+        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+        text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+        return text
+
     def flush_paragraph():
         if paragraph_buffer:
             paragraph_text = ' '.join(part.strip() for part in paragraph_buffer if part.strip())
             if paragraph_text:
-                html.append(f'<p>{paragraph_text}</p>')
+                html.append(f'<p>{_format_inline(paragraph_text)}</p>')
             paragraph_buffer.clear()
 
     def flush_list():
         if list_buffer:
             html.append('<ul class="section-list">')
             for item in list_buffer:
-                html.append(f'<li>{item}</li>')
+                html.append(f'<li>{_format_inline(item)}</li>')
             html.append('</ul>')
             list_buffer.clear()
 
@@ -47,13 +60,13 @@ def render_beginner_markdown(content):
         if stripped.startswith('## '):
             flush_paragraph()
             flush_list()
-            html.append(f'<h2 class="section-title">{stripped[3:].strip()}</h2>')
+            html.append(f'<h2 class="section-title">{_format_inline(stripped[3:].strip())}</h2>')
             continue
 
         if stripped.startswith('### '):
             flush_paragraph()
             flush_list()
-            html.append(f'<h3 class="subsection-title">{stripped[4:].strip()}</h3>')
+            html.append(f'<h3 class="subsection-title">{_format_inline(stripped[4:].strip())}</h3>')
             continue
 
         if stripped.startswith('- ') or stripped.startswith('* ') or stripped.startswith('1. '):

@@ -1,12 +1,31 @@
-from .base import build_feature_prompt
-
-
 def build_quiz_prompt(extracted_text):
-    instruction = (
-        "Create exactly 10 paper-specific quiz questions that assess understanding of the paper's key ideas. "
-        "The questions must be grounded in the uploaded paper and should test conceptual understanding, not generic textbook knowledge. "
-        "Generate 4 easy, 4 medium, and 2 hard questions. "
-        "Each question must include four realistic options, one correct answer, and a concise explanation of why the correct answer is right. "
-        "Return the questions as a JSON array of objects in the schema described below, with each item containing question, options, correct_answer, difficulty, and explanation."
-    )
-    return build_feature_prompt(extracted_text, 'quiz questions', instruction)
+    return f"""Return ONLY valid JSON. No markdown, no code fences, no extra text.
+
+Generate exactly 10 paper-specific quiz questions from the paper text below.
+
+JSON rules:
+- Use ONLY double quotes for keys and string values.
+- Escape any double quote inside a string as \\".
+- Do NOT include literal newlines inside JSON string values.
+- Every object in quiz_questions must have exactly these keys: question, options, correct_answer, explanation, difficulty.
+- options must be an array of exactly 4 strings.
+- correct_answer must exactly match one of the 4 option strings.
+- difficulty must be Easy, Medium, or Hard.
+- explanation must be 1-2 sentences.
+
+Schema:
+{{
+  "quiz_questions": [
+    {{
+      "question": "string",
+      "options": ["string", "string", "string", "string"],
+      "correct_answer": "string",
+      "explanation": "string",
+      "difficulty": "Easy"
+    }}
+  ]
+}}
+
+Paper text:
+{extracted_text}
+"""

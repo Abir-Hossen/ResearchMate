@@ -49,7 +49,7 @@ class BaseProvider(ABC):
 class MockProvider(BaseProvider):
     """Simple mock provider used for local testing and compatibility."""
 
-    def generate(self, prompt):
+    def generate(self, prompt, max_completion_tokens=None):
         return (
             '{"beginner_explanation":"A simple explanation of the paper.",'
             '"technical_explanation":"A technical explanation of the paper.",'
@@ -83,7 +83,7 @@ class GroqProvider(BaseProvider):
 
         self.groq_module = groq
         self.client = Groq(api_key=api_key)
-        self.model_name = getattr(settings, 'GROQ_MODEL', None) or 'llama-3.3-70b-versatile'
+        self.model_name = getattr(settings, 'GROQ_MODEL', None) or 'openai/gpt-oss-120b'
 
     def get_error_details(self, exc):
         groq_error_name = type(exc).__name__
@@ -156,15 +156,17 @@ class GroqProvider(BaseProvider):
 
         return super().get_error_details(exc)
 
-    def generate(self, prompt):
+    def generate(self, prompt, max_completion_tokens=None):
         self.last_usage = None
         self.last_response_time = None
+        completion_limit = 4000 if max_completion_tokens is None else max_completion_tokens
         start_time = time.perf_counter()
         try:
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
+                max_completion_tokens=completion_limit,
             )
         except Exception as exc:
             self.last_error_details = self.get_error_details(exc)
