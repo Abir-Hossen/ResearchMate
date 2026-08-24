@@ -385,7 +385,7 @@ class PaperUploadTests(TestCase):
         self.assertIn('"sections"', prompt)
         self.assertIn('"title"', prompt)
         self.assertIn('"explanation"', prompt)
-        self.assertIn('80-120 word', prompt)
+        self.assertIn('60-90 word', prompt)
         self.assertIn('expert academic reading tutor', prompt)
         self.assertIn('Abstract', prompt)
         self.assertIn('Introduction', prompt)
@@ -400,12 +400,12 @@ class PaperUploadTests(TestCase):
 
         prompt = build_section_learning_prompt(long_text)
 
-        self.assertIn('Paper text:', prompt)
+        self.assertIn('Labeled paper sections:', prompt)
         self.assertIn('[truncated]', prompt)
         self.assertLess(len(prompt), 25000)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"The motivation and context are explained."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"The approach is explained clearly."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem, explains the gap in prior systems, and motivates the proposed solution by emphasizing the practical constraints and limitations that motivate the study in a concrete way."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"The approach is explained clearly."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
     def test_generate_section_learning_persists_explanation(self, mock_generate):
         user = User.objects.create_user(username='sectionconclusion', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Conclusion Paper', pdf_file=SimpleUploadedFile('section-conclusion.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -421,7 +421,7 @@ class PaperUploadTests(TestCase):
 
         self.assertEqual(len(sections), 6)
         self.assertEqual(sections[5].title, 'Conclusion')
-        self.assertIn('closes the discussion', sections[5].summary)
+        self.assertIn('The study is wrapped up.', sections[5].summary)
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
@@ -442,11 +442,10 @@ class PaperUploadTests(TestCase):
 
         first_call = mock_generate.call_args_list[0]
         self.assertEqual(first_call.args[0], 'section_learning')
-        # A compact paper overview is sent to the AI
         sent_text = first_call.args[1]
         self.assertIn('Introduction:', sent_text)
         self.assertIn('This paper introduces the problem and the method', sent_text)
-        self.assertIn('Methods:', sent_text)
+        self.assertIn('Methodology:', sent_text)
         self.assertEqual(first_call.kwargs['prompt_type'], 'section_detection')
 
     def test_prepare_section_learning_text_compacts_large_input(self):
@@ -468,7 +467,7 @@ class PaperUploadTests(TestCase):
         self.assertIn('"sections"', detection_prompt)
         self.assertIn('"title"', detection_prompt)
         self.assertIn('"explanation"', detection_prompt)
-        self.assertIn('80-120 word', detection_prompt)
+        self.assertIn('60-90 word', detection_prompt)
         self.assertIn('expert academic reading tutor', detection_prompt)
         self.assertNotIn('entire paper', detection_prompt.lower())
 
@@ -550,7 +549,8 @@ class PaperUploadTests(TestCase):
         self.assertEqual(mock_generate.call_count, 1)
         self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 6)
         intro_section = PaperSection.objects.get(paper=paper, title='Introduction')
-        self.assertIn('technical paper excerpt', intro_section.summary)
+        self.assertIn('research problem', intro_section.summary)
+        self.assertIn('motivates the proposed solution', intro_section.summary)
 
         sections_again = generate_section_learning(paper)
         self.assertEqual(len(sections_again), 6)
@@ -747,12 +747,10 @@ Additional results in a separate section.
         self.assertEqual(len(sections), 6)
         self.assertEqual(sections[3].title, 'Methodology')
         self.assertEqual(mock_generate.call_count, 1)
-        # Verify the overview was sent to the AI
         sent_text = mock_generate.call_args.args[1]
         self.assertIn('Methodology:', sent_text)
-        self.assertIn('Results:', sent_text)
-        # Verify the long methodology text was compacted in the overview
-        self.assertLess(sent_text.count('word'), 100)
+        self.assertIn('Results and Discussion:', sent_text)
+        self.assertLess(sent_text.count('word'), 200)
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."}]}')

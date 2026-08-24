@@ -22,60 +22,49 @@ def build_section_learning_prompt(extracted_text, paper_context=None):
         return ''
 
     compact_text = _compact_section_text(extracted_text)
-    return f"""You are an expert academic reading tutor. Analyze the research paper text below and explain the following 6 sections.
+    return f"""You are an expert academic reading tutor. Below is a paper with labeled sections. For EACH labeled section below, write exactly ONE concise explanation of 60-90 words grounded ONLY in that section's text.
+Do NOT use information from another section. Do NOT invent facts, methods, datasets, or findings not present in the supplied text.
 
-REQUIRED SECTIONS:
-1. Abstract
-2. Introduction
-3. Related Work
-4. Methodology
-5. Results and Discussion
-6. Conclusion
-
-For each section, write exactly ONE concise explanation of 80-120 words.
-Every explanation MUST reference specific content from the paper (methods, datasets, results, claims, numbers, technical details).
-Do NOT write generic academic filler.
-
-If a section does not exist in the paper, write "This section is not present in the paper." for that section only.
+If a section shows "[No text available for this section]", write "This section is not present in the paper." for that section only.
 
 OUTPUT FORMAT - Return ONLY valid JSON:
 {{
   "sections": [
     {{
       "title": "Abstract",
-      "explanation": "80-120 word paper-specific explanation."
+      "explanation": "60-90 word paper-specific explanation."
     }},
     {{
       "title": "Introduction",
-      "explanation": "80-120 word paper-specific explanation."
+      "explanation": "60-90 word paper-specific explanation."
     }},
     {{
       "title": "Related Work",
-      "explanation": "80-120 word paper-specific explanation."
+      "explanation": "60-90 word paper-specific explanation."
     }},
     {{
       "title": "Methodology",
-      "explanation": "80-120 word paper-specific explanation."
+      "explanation": "60-90 word paper-specific explanation."
     }},
     {{
       "title": "Results and Discussion",
-      "explanation": "80-120 word paper-specific explanation."
+      "explanation": "60-90 word paper-specific explanation."
     }},
     {{
       "title": "Conclusion",
-      "explanation": "80-120 word paper-specific explanation."
+      "explanation": "60-90 word paper-specific explanation."
     }}
   ]
 }}
 
 RULES:
-- Return exactly 6 sections in the order shown above.
+- Return exactly 6 sections. The section titles must be exactly: Abstract, Introduction, Related Work, Methodology, Results and Discussion, Conclusion.
 - Do NOT include markdown, code fences, or any text outside the JSON.
-- Do NOT invent facts not supported by the paper text.
+- Do NOT invent facts not supported by the section text.
+- Keep each explanation under 90 words to avoid truncation.
 
-Paper text:
-{compact_text}
-"""
+Labeled paper sections:
+{compact_text}"""
 
 
 def get_section_detection_prompt(extracted_text):
@@ -85,4 +74,28 @@ def get_section_detection_prompt(extracted_text):
 
 def get_single_section_explanation_prompt(section_title, section_text, paper_context=None):
     """Build single-section explanation prompt."""
-    return build_section_learning_prompt(section_text, paper_context=paper_context)
+    if not section_text:
+        return ''
+
+    compact_text = _compact_section_text(section_text)
+    return f"""You are an expert academic reading tutor. Explain the "{section_title}" section below in exactly 80-120 words, grounded ONLY in the supplied text.
+Do NOT use information from another section. Do NOT invent facts, methods, datasets, or findings not present in the supplied text.
+
+OUTPUT FORMAT - Return ONLY valid JSON:
+{{
+  "sections": [
+    {{
+      "title": "{section_title}",
+      "explanation": "80-120 word paper-specific explanation."
+    }}
+  ]
+}}
+
+RULES:
+- Return exactly 1 section.
+- Do NOT include markdown, code fences, or any text outside the JSON.
+- Do NOT invent facts not supported by the section text.
+
+Paper text:
+{compact_text}
+"""
