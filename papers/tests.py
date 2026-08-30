@@ -22,6 +22,7 @@ from .prompts.section_learning import build_section_learning_prompt
 from .prompts.technical import build_technical_prompt
 from .response_validator import validate_json_response
 from .services import _get_user_facing_error_message
+from .technical_service import TechnicalExplanationError, _clean_technical_markdown
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .quiz_service import QuizGenerationError, generate_quiz
 
@@ -1440,3 +1441,86 @@ Additional results in a separate section.
         self.assertEqual(progress.paper, paper)
         self.assertEqual(paper.ai_analysis, analysis)
         self.assertEqual(paper.learning_progress, progress)
+
+
+def _tech_json(word_count):
+    phrase = 'word '
+    text = (phrase * word_count).strip()
+    return '{"technical_explanation": "' + text + '"}'
+
+
+def _tech_text(word_count):
+    """Return just the word-count-controlled explanation text (no JSON wrapper)."""
+    phrase = 'word '
+    return (phrase * word_count).strip()
+
+
+class TechnicalExplanationWordCountTests(TestCase):
+    """Unit tests for the word-count validation in technical explanation generation."""
+
+    def test_response_within_target_range_is_accepted(self):
+        cleaned = _clean_technical_markdown(_tech_json(600))
+        self.assertEqual(cleaned, _tech_text(600))
+
+    def test_response_at_minimum_threshold_is_accepted(self):
+        cleaned = _clean_technical_markdown(_tech_json(450))
+        self.assertEqual(cleaned, _tech_text(450))
+
+    def test_response_at_maximum_threshold_is_accepted(self):
+        cleaned = _clean_technical_markdown(_tech_json(850))
+        self.assertEqual(cleaned, _tech_text(850))
+
+    def test_response_below_minimum_threshold_is_rejected(self):
+        self.assertIsNone(_clean_technical_markdown(_tech_json(449)))
+
+    def test_response_above_maximum_threshold_is_rejected(self):
+        self.assertIsNone(_clean_technical_markdown(_tech_json(851)))
+
+    def test_empty_response_is_rejected_with_error(self):
+        with self.assertRaises(TechnicalExplanationError):
+            _clean_technical_markdown('{"technical_explanation": ""}')
+
+    def test_extremely_short_response_returns_none(self):
+        # Non-empty but far-too-short text: word-count check returns None;
+        # TechnicalExplanationError is raised by the caller, not this function.
+        self.assertIsNone(_clean_technical_markdown('{"technical_explanation": "too short"}'))
+
+    def test_excessively_long_response_is_rejected(self):
+        long_text = _tech_json(900)
+        self.assertIsNone(_clean_technical_markdown(long_text))
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate')
+    def test_valid_slightly_under_target_response_is_stored(self, mock_generate):
+        user = User.objects.create_user(username='techunder', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Under Target Paper', pdf_file=SimpleUploadedFile('under.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='A paper about neural network optimization techniques.', extraction_status='Ready')
+
+        mock_generate.return_value = '{"technical_explanation":"' + _tech_text(470) + '","beginner_explanation":"Simple","key_contributions":[],"key_concepts":[],"reading_difficulty":{"level":"Intermediate","reason":""},"glossary":[],"flashcards":[],"viva_questions":[]}'
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('paper_technical', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertEqual(analysis.analysis_status, 'Ready')
+        self.assertEqual(analysis.technical_explanation, _tech_text(470))
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate')
+    def test_valid_slightly_over_target_response_is_stored(self, mock_generate):
+        user = User.objects.create_user(username='techover', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Over Target Paper', pdf_file=SimpleUploadedFile('over.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='A paper about distributed systems and consensus algorithms.', extraction_status='Ready')
+
+        mock_generate.return_value = '{"technical_explanation":"' + _tech_text(760) + '","beginner_explanation":"Simple","key_contributions":[],"key_concepts":[],"reading_difficulty":{"level":"Intermediate","reason":""},"glossary":[],"flashcards":[],"viva_questions":[]}'
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('paper_technical', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertEqual(analysis.analysis_status, 'Ready')
+        self.assertEqual(analysis.technical_explanation, _tech_text(760))
