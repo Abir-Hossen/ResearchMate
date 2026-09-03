@@ -19,7 +19,7 @@ from .dashboard_service import (
 from .forms import PaperUploadForm
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .glossary_service import GlossaryGenerationError, generate_glossary
-from .models import Paper, QuizAttempt
+from .models import Paper, QuizAttempt, Review
 from .quiz_service import QuizGenerationError, generate_quiz
 from .revision_notes_service import RevisionNotesGenerationError, generate_revision_notes
 from .viva_service import VivaGenerationError, generate_viva_questions
@@ -229,7 +229,7 @@ def paper_sections(request, paper_id):
             messages.error(request, str(exc))
         return redirect('paper_sections', paper_id=paper.id)
 
-    context = build_workspace_context(request.user, paper_id, 'sections')
+    context = build_workspace_context(request.user, paper_id, 'section_learning')
     return render(request, 'papers/workspace/sections.html', context)
 
 
@@ -395,6 +395,41 @@ def paper_notes(request, paper_id):
     analysis = paper.ai_analysis if hasattr(paper, 'ai_analysis') else None
     context['revision_notes'] = analysis.revision_notes if analysis else ''
     return render(request, 'papers/workspace/notes.html', context)
+
+
+def review_list_view(request):
+    reviews = Review.objects.filter(is_approved=True).select_related('user').order_by('-created_at')[:20]
+    return render(request, 'papers/reviews.html', {'reviews': reviews})
+
+
+@login_required(login_url='login')
+def review_submit_view(request):
+    if request.method == 'POST':
+        rating = request.POST.get('rating')
+        comment = request.POST.get('comment', '').strip()
+        try:
+            rating_int = int(rating)
+        except (TypeError, ValueError):
+            messages.error(request, 'Please select a valid rating.')
+            return redirect('review_list')
+
+        if not (1 <= rating_int <= 5):
+            messages.error(request, 'Rating must be between 1 and 5.')
+            return redirect('review_list')
+
+        if not comment:
+            messages.error(request, 'Please write a review comment.')
+            return redirect('review_list')
+
+        Review.objects.create(
+            user=request.user,
+            rating=rating_int,
+            comment=comment,
+        )
+        messages.success(request, 'Thank you! Your review has been submitted for approval.')
+        return redirect('review_list')
+
+    return redirect('review_list')
 
 
 def groq_test_view(request):

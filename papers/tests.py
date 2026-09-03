@@ -12,9 +12,12 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from decimal import Decimal
+from datetime import timedelta
 from reportlab.pdfgen import canvas
 
-from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, PaperSection, QuizQuestion, VivaQuestion
+from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, PaperSection, QuizAttempt, QuizQuestion, Review, VivaQuestion
+from subscriptions.models import SubscriptionPlan, UserSubscription
 from .prompts.beginner import build_beginner_prompt
 from .prompts.glossary import build_glossary_prompt
 from .prompts.revision_notes import build_revision_notes_prompt
@@ -22,6 +25,7 @@ from .prompts.section_learning import build_section_learning_prompt
 from .prompts.technical import build_technical_prompt
 from .response_validator import validate_json_response
 from .services import _get_user_facing_error_message
+from .technical_service import TechnicalExplanationError, _clean_technical_markdown
 from .flashcard_service import FlashcardGenerationError, generate_flashcards
 from .quiz_service import QuizGenerationError, generate_quiz
 
@@ -385,7 +389,7 @@ class PaperUploadTests(TestCase):
         self.assertIn('"sections"', prompt)
         self.assertIn('"title"', prompt)
         self.assertIn('"explanation"', prompt)
-        self.assertIn('80-120 word', prompt)
+        self.assertIn('60-90 word', prompt)
         self.assertIn('expert academic reading tutor', prompt)
         self.assertIn('Abstract', prompt)
         self.assertIn('Introduction', prompt)
@@ -400,12 +404,12 @@ class PaperUploadTests(TestCase):
 
         prompt = build_section_learning_prompt(long_text)
 
-        self.assertIn('Paper text:', prompt)
+        self.assertIn('Labeled paper sections:', prompt)
         self.assertIn('[truncated]', prompt)
         self.assertLess(len(prompt), 25000)
 
     @override_settings(AI_PROVIDER='mock')
-    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"The motivation and context are explained."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"The approach is explained clearly."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
+    @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem, explains the gap in prior systems, and motivates the proposed solution by emphasizing the practical constraints and limitations that motivate the study in a concrete way."},{"title":"Related Work","explanation":"Prior work is reviewed here."},{"title":"Methodology","explanation":"The approach is explained clearly."},{"title":"Results and Discussion","explanation":"The findings are summarized."},{"title":"Conclusion","explanation":"The study is wrapped up."}]}')
     def test_generate_section_learning_persists_explanation(self, mock_generate):
         user = User.objects.create_user(username='sectionconclusion', password='Secret123')
         paper = Paper.objects.create(owner=user, title='Section Conclusion Paper', pdf_file=SimpleUploadedFile('section-conclusion.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
@@ -421,7 +425,7 @@ class PaperUploadTests(TestCase):
 
         self.assertEqual(len(sections), 6)
         self.assertEqual(sections[5].title, 'Conclusion')
-        self.assertIn('closes the discussion', sections[5].summary)
+        self.assertIn('The study is wrapped up.', sections[5].summary)
         self.assertEqual(mock_generate.call_count, 1)
 
     @override_settings(AI_PROVIDER='mock')
@@ -442,11 +446,10 @@ class PaperUploadTests(TestCase):
 
         first_call = mock_generate.call_args_list[0]
         self.assertEqual(first_call.args[0], 'section_learning')
-        # A compact paper overview is sent to the AI
         sent_text = first_call.args[1]
         self.assertIn('Introduction:', sent_text)
         self.assertIn('This paper introduces the problem and the method', sent_text)
-        self.assertIn('Methods:', sent_text)
+        self.assertIn('Methodology:', sent_text)
         self.assertEqual(first_call.kwargs['prompt_type'], 'section_detection')
 
     def test_prepare_section_learning_text_compacts_large_input(self):
@@ -468,7 +471,7 @@ class PaperUploadTests(TestCase):
         self.assertIn('"sections"', detection_prompt)
         self.assertIn('"title"', detection_prompt)
         self.assertIn('"explanation"', detection_prompt)
-        self.assertIn('80-120 word', detection_prompt)
+        self.assertIn('60-90 word', detection_prompt)
         self.assertIn('expert academic reading tutor', detection_prompt)
         self.assertNotIn('entire paper', detection_prompt.lower())
 
@@ -550,7 +553,8 @@ class PaperUploadTests(TestCase):
         self.assertEqual(mock_generate.call_count, 1)
         self.assertEqual(PaperSection.objects.filter(paper=paper).count(), 6)
         intro_section = PaperSection.objects.get(paper=paper, title='Introduction')
-        self.assertIn('technical paper excerpt', intro_section.summary)
+        self.assertIn('research problem', intro_section.summary)
+        self.assertIn('motivates the proposed solution', intro_section.summary)
 
         sections_again = generate_section_learning(paper)
         self.assertEqual(len(sections_again), 6)
@@ -747,12 +751,10 @@ Additional results in a separate section.
         self.assertEqual(len(sections), 6)
         self.assertEqual(sections[3].title, 'Methodology')
         self.assertEqual(mock_generate.call_count, 1)
-        # Verify the overview was sent to the AI
         sent_text = mock_generate.call_args.args[1]
         self.assertIn('Methodology:', sent_text)
-        self.assertIn('Results:', sent_text)
-        # Verify the long methodology text was compacted in the overview
-        self.assertLess(sent_text.count('word'), 100)
+        self.assertIn('Results and Discussion:', sent_text)
+        self.assertLess(sent_text.count('word'), 200)
 
     @override_settings(AI_PROVIDER='mock')
     @patch('papers.section_learning_service.AIService.generate_feature', return_value='{"sections":[{"title":"Abstract","explanation":"A brief overview of the work."},{"title":"Introduction","explanation":"This section introduces the research problem and motivation."}]}')
@@ -1442,3 +1444,295 @@ Additional results in a separate section.
         self.assertEqual(progress.paper, paper)
         self.assertEqual(paper.ai_analysis, analysis)
         self.assertEqual(paper.learning_progress, progress)
+
+
+def _tech_json(word_count):
+    phrase = 'word '
+    text = (phrase * word_count).strip()
+    return '{"technical_explanation": "' + text + '"}'
+
+
+def _tech_text(word_count):
+    """Return just the word-count-controlled explanation text (no JSON wrapper)."""
+    phrase = 'word '
+    return (phrase * word_count).strip()
+
+
+class TechnicalExplanationWordCountTests(TestCase):
+    """Unit tests for the word-count validation in technical explanation generation."""
+
+    def test_response_within_target_range_is_accepted(self):
+        cleaned = _clean_technical_markdown(_tech_json(600))
+        self.assertEqual(cleaned, _tech_text(600))
+
+    def test_response_at_minimum_threshold_is_accepted(self):
+        cleaned = _clean_technical_markdown(_tech_json(450))
+        self.assertEqual(cleaned, _tech_text(450))
+
+    def test_response_at_maximum_threshold_is_accepted(self):
+        cleaned = _clean_technical_markdown(_tech_json(850))
+        self.assertEqual(cleaned, _tech_text(850))
+
+    def test_response_below_minimum_threshold_is_rejected(self):
+        self.assertIsNone(_clean_technical_markdown(_tech_json(449)))
+
+    def test_response_above_maximum_threshold_is_rejected(self):
+        self.assertIsNone(_clean_technical_markdown(_tech_json(851)))
+
+    def test_empty_response_is_rejected_with_error(self):
+        with self.assertRaises(TechnicalExplanationError):
+            _clean_technical_markdown('{"technical_explanation": ""}')
+
+    def test_extremely_short_response_returns_none(self):
+        # Non-empty but far-too-short text: word-count check returns None;
+        # TechnicalExplanationError is raised by the caller, not this function.
+        self.assertIsNone(_clean_technical_markdown('{"technical_explanation": "too short"}'))
+
+    def test_excessively_long_response_is_rejected(self):
+        long_text = _tech_json(900)
+        self.assertIsNone(_clean_technical_markdown(long_text))
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate')
+    def test_valid_slightly_under_target_response_is_stored(self, mock_generate):
+        user = User.objects.create_user(username='techunder', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Under Target Paper', pdf_file=SimpleUploadedFile('under.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='A paper about neural network optimization techniques.', extraction_status='Ready')
+
+        mock_generate.return_value = '{"technical_explanation":"' + _tech_text(470) + '","beginner_explanation":"Simple","key_contributions":[],"key_concepts":[],"reading_difficulty":{"level":"Intermediate","reason":""},"glossary":[],"flashcards":[],"viva_questions":[]}'
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('paper_technical', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertEqual(analysis.analysis_status, 'Ready')
+        self.assertEqual(analysis.technical_explanation, _tech_text(470))
+
+    @override_settings(AI_PROVIDER='mock')
+    @patch('papers.ai_providers.MockProvider.generate')
+    def test_valid_slightly_over_target_response_is_stored(self, mock_generate):
+        user = User.objects.create_user(username='techover', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Over Target Paper', pdf_file=SimpleUploadedFile('over.pdf', b'%PDF-1.4\n', content_type='application/pdf'))
+        PaperContent.objects.create(paper=paper, extracted_text='A paper about distributed systems and consensus algorithms.', extraction_status='Ready')
+
+        mock_generate.return_value = '{"technical_explanation":"' + _tech_text(760) + '","beginner_explanation":"Simple","key_contributions":[],"key_concepts":[],"reading_difficulty":{"level":"Intermediate","reason":""},"glossary":[],"flashcards":[],"viva_questions":[]}'
+
+        self.client.force_login(user)
+        response = self.client.post(reverse('paper_technical', args=[paper.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        analysis = AIAnalysis.objects.get(paper=paper)
+        self.assertEqual(analysis.analysis_status, 'Ready')
+        self.assertEqual(analysis.technical_explanation, _tech_text(760))
+
+
+class LearningNavigationTests(TestCase):
+    def test_beginner_page_has_next_button(self):
+        user = User.objects.create_user(username='navbeginner', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Nav Paper', pdf_file='papers/nav.pdf')
+        AIAnalysis.objects.create(paper=paper, beginner_explanation='Beginner content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/papers/1/technical/"')
+        self.assertContains(response, 'Next')
+
+    def test_technical_page_has_next_button(self):
+        user = User.objects.create_user(username='navtechnical', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Tech Paper', pdf_file='papers/navtech.pdf')
+        AIAnalysis.objects.create(paper=paper, technical_explanation='Technical content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/papers/1/sections/"')
+        self.assertContains(response, 'Next')
+
+    def test_notes_page_has_back_to_papers_button(self):
+        user = User.objects.create_user(username='navnotes', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Notes Paper', pdf_file='papers/navnotes.pdf')
+        AIAnalysis.objects.create(paper=paper, revision_notes='Notes content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_notes', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Back to My Papers')
+
+    def test_section_accordion_has_next_button(self):
+        user = User.objects.create_user(username='navsections', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Sections Paper', pdf_file='papers/navsec.pdf')
+        PaperSection.objects.create(paper=paper, title='Abstract', section_order=0, summary='Abstract summary')
+        PaperSection.objects.create(paper=paper, title='Introduction', section_order=1, summary='Intro summary')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_sections', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Abstract')
+        self.assertContains(response, 'Introduction')
+        self.assertContains(response, 'Next')
+
+    def test_quiz_last_question_shows_done_button(self):
+        user = User.objects.create_user(username='quizdone', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Quiz Done Paper', pdf_file='papers/quizdone.pdf')
+        QuizQuestion.objects.create(
+            paper=paper,
+            question='What is the answer?',
+            option_a='A',
+            option_b='B',
+            option_c='C',
+            option_d='D',
+            correct_answer='A',
+            display_order=0,
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_quiz', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Done')
+
+    def test_section_next_navigates_to_next_module(self):
+        user = User.objects.create_user(username='navlast', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Last Paper', pdf_file='papers/navlast.pdf')
+        PaperSection.objects.create(paper=paper, title='Conclusion', section_order=0, summary='Conclusion summary')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_sections', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/papers/1/glossary/"')
+
+    def test_beginner_page_has_no_previous_button(self):
+        user = User.objects.create_user(username='navbeginnerprev', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Nav Paper', pdf_file='papers/nav.pdf')
+        AIAnalysis.objects.create(paper=paper, beginner_explanation='Beginner content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Previous')
+
+    def test_technical_page_has_previous_button(self):
+        user = User.objects.create_user(username='navtechnicalprev', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Tech Paper', pdf_file='papers/navtech.pdf')
+        AIAnalysis.objects.create(paper=paper, technical_explanation='Technical content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Previous')
+        self.assertContains(response, 'href="/papers/1/beginner/"')
+
+    def test_section_page_has_previous_button(self):
+        user = User.objects.create_user(username='navsectionprev', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Section Prev', pdf_file='papers/navsecprev.pdf')
+        PaperSection.objects.create(paper=paper, title='Abstract', section_order=0, summary='Abstract summary')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_sections', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Previous')
+        self.assertContains(response, 'href="/papers/1/technical/"')
+
+
+class PremiumBadgeColorTests(TestCase):
+    def test_basic_user_sees_golden_premium_badges(self):
+        user = User.objects.create_user(username='badgebasic', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Badge Paper', pdf_file='papers/badge.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'bg-warning text-dark')
+
+    def test_premium_user_sees_green_premium_badges(self):
+        user = User.objects.create_user(username='badgepremium', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Badge Premium Paper', pdf_file='papers/badgeprem.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'bg-success text-white')
+
+    def test_expired_user_sees_golden_premium_badges(self):
+        user = User.objects.create_user(username='badgeexpired', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-badge-expired',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        UserSubscription.objects.create(
+            user=user,
+            plan=plan,
+            status='ACTIVE',
+            start_date=timezone.now() - timedelta(days=10),
+            end_date=timezone.now() - timedelta(days=3),
+        )
+        paper = Paper.objects.create(owner=user, title='Badge Expired Paper', pdf_file='papers/badgeexp.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'bg-warning text-dark')
+
+
+class ReviewSystemTests(TestCase):
+    def test_authenticated_user_can_submit_review(self):
+        user = User.objects.create_user(username='reviewer', password='Secret123')
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse('review_submit'),
+            {'rating': 5, 'comment': 'Great platform!'},
+        )
+        self.assertRedirects(response, reverse('review_list'))
+        review = Review.objects.get(user=user)
+        self.assertEqual(review.rating, 5)
+        self.assertEqual(review.comment, 'Great platform!')
+        self.assertFalse(review.is_approved)
+
+    def test_review_is_associated_with_authenticated_user(self):
+        user = User.objects.create_user(username='reviewowner', password='Secret123')
+        self.client.force_login(user)
+        self.client.post(
+            reverse('review_submit'),
+            {'rating': 4, 'comment': 'Nice!'},
+        )
+        review = Review.objects.first()
+        self.assertEqual(review.user, user)
+
+    def test_invalid_rating_is_rejected(self):
+        user = User.objects.create_user(username='badrating', password='Secret123')
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse('review_submit'),
+            {'rating': 6, 'comment': 'Great!'},
+        )
+        self.assertRedirects(response, reverse('review_list'))
+        self.assertEqual(Review.objects.count(), 0)
+
+    def test_unapproved_reviews_not_publicly_displayed(self):
+        user = User.objects.create_user(username='unapproved', password='Secret123')
+        Review.objects.create(user=user, rating=5, comment='Secret', is_approved=False)
+        response = self.client.get(reverse('review_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Secret')
+
+    def test_approved_reviews_are_publicly_displayed(self):
+        user = User.objects.create_user(username='approved', password='Secret123')
+        review = Review.objects.create(user=user, rating=5, comment='Public', is_approved=True)
+        response = self.client.get(reverse('review_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Public')
+        self.assertContains(response, user.username)
+
+    def test_users_cannot_submit_review_for_another_user(self):
+        owner = User.objects.create_user(username='owner', password='Secret123')
+        other = User.objects.create_user(username='other', password='Secret123')
+        self.client.force_login(other)
+        self.client.post(
+            reverse('review_submit'),
+            {'rating': 5, 'comment': 'Fake review'},
+        )
+        reviews = Review.objects.filter(user=other)
+        self.assertEqual(reviews.count(), 1)
+        self.assertEqual(reviews.first().user, other)

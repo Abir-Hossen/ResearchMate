@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.http import HttpResponse
 from django.utils import timezone
 
@@ -34,6 +35,16 @@ from .sslcommerz_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _get_safe_return_url(request):
+    return_url = request.session.pop('payment_return_url', None)
+    if not return_url:
+        return None
+    allowed_hosts = {request.get_host()}
+    if url_has_allowed_host_and_scheme(return_url, allowed_hosts=allowed_hosts):
+        return return_url
+    return None
 
 
 @login_required(login_url='login')
@@ -75,6 +86,13 @@ def checkout_view(request, plan_slug):
         return redirect('subscriptions:pricing')
 
     mark_transaction_pending(transaction)
+
+    return_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or ''
+    if return_url and url_has_allowed_host_and_scheme(return_url, allowed_hosts={request.get_host()}):
+        request.session['payment_return_url'] = return_url
+    else:
+        request.session.pop('payment_return_url', None)
+
     return redirect(gateway_url)
 
 
@@ -129,11 +147,13 @@ def payment_success_view(request):
 
     if transaction.status == PaymentTransaction.PaymentStatus.SUCCESS:
         subscription = get_active_subscription(transaction.user)
+        return_url = _get_safe_return_url(request)
         return render(request, 'subscriptions/payment_return.html', {
             'outcome': 'success',
             'activated': True,
             'plan_name': transaction.plan.name,
             'expires_date': subscription.end_date if subscription else None,
+            'return_url': return_url,
         })
 
     try:
@@ -157,11 +177,13 @@ def payment_success_view(request):
         })
 
     subscription = get_active_subscription(transaction.user)
+    return_url = _get_safe_return_url(request)
     return render(request, 'subscriptions/payment_return.html', {
         'outcome': 'success',
         'activated': True,
         'plan_name': transaction.plan.name,
         'expires_date': subscription.end_date if subscription else None,
+        'return_url': return_url,
     })
 
 

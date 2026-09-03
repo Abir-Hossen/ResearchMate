@@ -14,9 +14,21 @@
                         <li><strong>Access:</strong> All Premium AI learning features</li>
                         {% if expires_date %}<li><strong>Subscription expires:</strong> {{ expires_date|date:"M d, Y" }}</li>{% endif %}
                     </ul>
+                    {% if return_url %}
+                        {% if user.is_authenticated %}
+                        <p class="text-muted small">You will be redirected shortly...</p>
+                        {% endif %}
+                    {% endif %}
                     <div class="d-grid gap-2 col-10 mx-auto">
+                        {% if return_url %}
+                        <a href="{{ return_url }}" class="btn btn-primary">Continue</a>
+                        {% else %}
                         <a href="{% url 'dashboard' %}" class="btn btn-primary">Go to Learning Dashboard</a>
                         <a href="{% url 'my_papers' %}" class="btn btn-outline-secondary">Continue to My Papers</a>
+                        {% endif %}
+                        {% if not user.is_authenticated %}
+                        <a href="{% url 'login' %}" class="btn btn-outline-primary mt-2">Log In to Continue</a>
+                        {% endif %}
                     </div>
                 {% elif outcome == 'success' %}
                     <h3 class="mb-3">Payment Received</h3>
@@ -43,4 +55,19 @@
         </div>
     </div>
 </div>
+{% if outcome == 'success' and activated and return_url and user.is_authenticated %}
+<script>
+    setTimeout(function() {
+        window.location.replace('{{ return_url }}');
+    }, 1500);
+</script>
+{% elif outcome == 'success' and activated and user.is_authenticated %}
+<script>
+    setTimeout(function() {
+        window.location.replace('{% url "dashboard" %}');
+    }, 1500);
+</script>
+{% elif outcome == 'success' and activated and not user.is_authenticated %}
+<p class="text-muted small mt-3">Please log in again to continue to your dashboard.</p>
+{% endif %}
 {% endblock %}

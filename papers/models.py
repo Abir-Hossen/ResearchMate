@@ -204,3 +204,21 @@ class LearningProgress(models.Model):
 
     def __str__(self):
         return f'Progress for {self.paper.title}'
+
+
+class Review(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
+    rating = models.PositiveSmallIntegerField()
+    comment = models.TextField()
+    is_approved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['is_approved', '-created_at']),
+            models.Index(fields=['user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} - {self.rating}/5'

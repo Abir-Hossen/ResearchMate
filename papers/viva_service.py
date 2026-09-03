@@ -82,6 +82,40 @@ def _clean_viva_entries(raw_entries):
     return cleaned
 
 
+def _generate_with_retry(paper, provider, ai_service, max_attempts=2):
+    """Attempt viva generation with focused prompt, retrying once on malformed JSON."""
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            raw_response = ai_service.generate_feature('viva', paper.content.extracted_text)
+        except Exception as exc:
+            last_error = exc
+            logger.warning('Viva generation attempt %d failed: %s', attempt + 1, exc)
+            continue
+
+        if not raw_response or not str(raw_response).strip():
+            last_error = ValueError('Empty viva response')
+            logger.warning('Viva generation attempt %d returned empty response.', attempt + 1)
+            continue
+
+        valid, payload, error_message = validate_json_response(raw_response)
+        if not valid:
+            repaired = _repair_viva_json(raw_response)
+            valid, payload, error_message = validate_json_response(repaired)
+
+        if valid:
+            return payload
+
+        last_error = ValueError(f'Invalid JSON: {error_message}')
+        logger.warning(
+            'Viva generation attempt %d returned invalid JSON: %s',
+            attempt + 1,
+            error_message,
+        )
+
+    raise VivaGenerationError('Viva question generation failed. Please try again later.') from last_error
+
+
 def generate_viva_questions(paper):
     """Generate paper-specific viva questions from stored extracted text and persist them."""
     try:
@@ -99,19 +133,11 @@ def generate_viva_questions(paper):
     try:
         provider = ProviderFactory.create_provider()
         ai_service = AIService(provider=provider)
-        raw_response = ai_service.generate_feature('viva', content.extracted_text)
+        payload = _generate_with_retry(paper, provider, ai_service)
+    except VivaGenerationError:
+        raise
     except Exception as exc:
         raise VivaGenerationError('Viva question generation failed. Please try again later.') from exc
-
-    if not raw_response or not str(raw_response).strip():
-        raise VivaGenerationError('The AI provider returned an empty viva response.')
-
-    valid, payload, error_message = validate_json_response(raw_response)
-    if not valid:
-        repaired = _repair_viva_json(raw_response)
-        valid, payload, error_message = validate_json_response(repaired)
-        if not valid:
-            raise VivaGenerationError(f'The AI provider returned an invalid JSON response: {error_message}')
 
     raw_questions = payload.get('viva_questions')
     if not isinstance(raw_questions, list):

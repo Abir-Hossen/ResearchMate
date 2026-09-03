@@ -26,6 +26,34 @@ MODULE_SEQUENCE = (
     ('viva', 'Viva Preparation'),
     ('notes', 'Study Notes'),
 )
+MODULE_URL_NAMES = {
+    'beginner': 'paper_beginner',
+    'technical': 'paper_technical',
+    'section_learning': 'paper_sections',
+    'glossary': 'paper_glossary',
+    'flashcards': 'paper_flashcards',
+    'quiz': 'paper_quiz',
+    'viva': 'paper_viva',
+    'notes': 'paper_notes',
+}
+MODULE_NEXT = {
+    'beginner': 'technical',
+    'technical': 'section_learning',
+    'section_learning': 'glossary',
+    'glossary': 'flashcards',
+    'flashcards': 'quiz',
+    'quiz': 'viva',
+    'viva': 'notes',
+}
+MODULE_PREVIOUS = {
+    'technical': 'beginner',
+    'section_learning': 'technical',
+    'glossary': 'section_learning',
+    'flashcards': 'glossary',
+    'quiz': 'flashcards',
+    'viva': 'quiz',
+    'notes': 'viva',
+}
 
 
 def get_module_completion_checks(paper):

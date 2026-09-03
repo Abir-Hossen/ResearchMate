@@ -1871,3 +1871,56 @@ class RegressionTests(TestCase):
         self.assertContains(response, reverse('subscriptions:payment_history'))
         self.assertContains(response, reverse('subscriptions:subscription_history'))
 
+class PaymentSessionPreservationTests(TestCase):
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.post')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_successful_payment_redirects_to_stored_return_url(self, mock_get, mock_post):
+        user = User.objects.create_user(username='sessionuser', password='Secret123')
+        plan = SubscriptionPlan.objects.get(slug='premium-weekly')
+        self.client.force_login(user)
+        mock_post.return_value = make_gateway_response({
+            'status': 'SUCCESS',
+            'GatewayPageURL': 'https://sandbox.sslcommerz.com/pay/abc',
+        })
+        response = self.client.post(
+            reverse('subscriptions:checkout', args=[plan.slug]),
+            {'next': '/papers/1/overview/'},
+        )
+        self.assertEqual(response.status_code, 302)
+        transaction = PaymentTransaction.objects.get(user=user, plan=plan)
+        self.assertEqual(transaction.status, PaymentTransaction.PaymentStatus.PENDING)
+        mock_get.return_value = make_gateway_response(make_verification_response(transaction))
+        response = self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Payment Successful')
+        self.assertContains(response, '/papers/1/overview/')
+        self.assertTrue(user_has_premium_access(user))
+
+    @override_settings(SSLCOMMERZ_STORE_ID='test_store', SSLCOMMERZ_STORE_PASSWORD='test_pass')
+    @patch('subscriptions.sslcommerz_service.requests.post')
+    @patch('subscriptions.sslcommerz_service.requests.get')
+    def test_successful_payment_activates_premium_before_redirect(self, mock_get, mock_post):
+        user = User.objects.create_user(username='sessionactivate', password='Secret123')
+        plan = SubscriptionPlan.objects.get(slug='premium-weekly')
+        self.client.force_login(user)
+        mock_post.return_value = make_gateway_response({
+            'status': 'SUCCESS',
+            'GatewayPageURL': 'https://sandbox.sslcommerz.com/pay/abc',
+        })
+        self.client.post(
+            reverse('subscriptions:checkout', args=[plan.slug]),
+            {'next': '/papers/1/overview/'},
+        )
+        transaction = PaymentTransaction.objects.get(user=user, plan=plan)
+        mock_get.return_value = make_gateway_response(make_verification_response(transaction))
+        response = self.client.post(
+            reverse('subscriptions:payment_success'),
+            {'tran_id': transaction.transaction_id, 'val_id': 'VAL-' + transaction.transaction_id},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Payment Successful')
+        self.assertTrue(user_has_premium_access(user))

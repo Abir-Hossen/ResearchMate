@@ -56,7 +56,9 @@ def _is_stale_technical_explanation(text):
         return True
 
     word_count = _word_count(cleaned)
-    if word_count < 500 or word_count > 800:
+    # Match the fresh-generation range so cached explanations are not treated
+    # differently from newly generated ones.
+    if word_count < 450 or word_count > 850:
         return True
 
     return False
@@ -122,7 +124,11 @@ def _clean_technical_markdown(raw_response):
 
     cleaned = technical_explanation.strip()
     word_count = _word_count(cleaned)
-    if word_count < 500 or word_count > 700:
+    # Prompt requests roughly 500-700 words; allow ~10% tolerance on each side
+    # to avoid rejecting valid paper-specific output that is naturally slightly
+    # shorter or longer. Still guard against empty, trivially short, or runaway
+    # responses.
+    if word_count < 450 or word_count > 850:
         return None
 
     return cleaned
