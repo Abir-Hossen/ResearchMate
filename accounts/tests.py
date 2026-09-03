@@ -279,6 +279,15 @@ class AuthenticationFlowTests(TestCase):
 
 
 class LandingFlowTests(TestCase):
+    def test_landing_page_navbar_is_present_and_visible(self):
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'navbar')
+        self.assertContains(response, 'fixed-top')
+        self.assertContains(response, 'Features')
+        self.assertContains(response, 'How It Works')
+        self.assertContains(response, 'Pricing')
+
     def test_anonymous_landing_premium_button_uses_login_next(self):
         response = self.client.get(reverse('home'))
         self.assertEqual(response.status_code, 200)

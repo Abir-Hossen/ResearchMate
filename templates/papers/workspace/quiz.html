@@ -50,11 +50,31 @@
                     {% endif %}
                 </div>
             {% endfor %}
-            <form method="post">
+            {% if previous_module_url or next_module_url %}
+            <div class="mt-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                {% if previous_module_url %}
+                <a class="btn btn-outline-secondary" href="{% url previous_module_url paper.id %}">Previous</a>
+                {% else %}
+                <span></span>
+                {% endif %}
+                <div class="d-flex gap-2 flex-wrap">
+                    {% if next_module_url %}
+                    <a class="btn btn-primary" href="{% url next_module_url paper.id %}">Done</a>
+                    {% endif %}
+                    <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="generate">
+                        <button class="btn btn-outline-primary" type="submit">Try Again</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <form method="post" class="mt-4 d-inline">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="generate">
                 <button class="btn btn-outline-primary" type="submit">Try Again</button>
             </form>
+            {% endif %}
         {% else %}
             <div class="mb-3">
                 <div class="d-flex justify-content-between align-items-center gap-2">
@@ -90,10 +110,10 @@
                         </label>
                     </div>
                 </div>
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center border-top pt-3 mt-3">
                     <button class="btn btn-outline-secondary" type="submit" name="action" value="prev" {% if question_index == 0 %}disabled{% endif %}>Previous</button>
                     {% if question_index == question_count|add:-1 %}
-                        <button class="btn btn-primary" type="submit">Submit Quiz</button>
+                        <button class="btn btn-primary" type="submit">Done</button>
                     {% else %}
                         <button class="btn btn-primary" type="submit" name="action" value="next">Next</button>
                     {% endif %}

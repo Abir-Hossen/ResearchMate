@@ -26,6 +26,18 @@
                     </div>
                 {% endfor %}
             </div>
+            {% if previous_module_url or next_module_url %}
+            <div class="mt-4 d-flex justify-content-between align-items-center">
+                {% if previous_module_url %}
+                <a class="btn btn-outline-secondary" href="{% url previous_module_url paper.id %}">Previous</a>
+                {% else %}
+                <span></span>
+                {% endif %}
+                {% if next_module_url %}
+                <a class="btn btn-primary" href="{% url next_module_url paper.id %}">Next</a>
+                {% endif %}
+            </div>
+            {% endif %}
         {% else %}
             <div class="empty-state rounded-4 p-4 p-lg-5">
                 <form method="post" action="{% url 'paper_sections' paper.id %}">

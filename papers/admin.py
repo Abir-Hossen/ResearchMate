@@ -11,6 +11,7 @@ from .models import (
     Paper,
     PaperContent,
     QuizQuestion,
+    Review,
     VivaQuestion,
 )
 
@@ -404,6 +405,29 @@ class LearningProgressAdmin(ViewOnlyGeneratedContentAdmin):
         ]
         return f'{len(completed)}/8 complete' if completed else '0/8 complete'
     module_status_summary.short_description = 'Module Status'
+
+
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = ('user', 'rating', 'comment_preview', 'is_approved', 'created_at')
+    list_filter = ('is_approved', 'rating', 'created_at')
+    search_fields = ('user__username', 'user__email', 'comment')
+    ordering = ('-created_at',)
+    list_editable = ('is_approved',)
+    actions = ['admin_approve_reviews', 'admin_reject_reviews']
+    readonly_fields = ('user', 'rating', 'comment', 'created_at')
+
+    @admin.action(description='Approve selected reviews')
+    def admin_approve_reviews(self, request, queryset):
+        queryset.update(is_approved=True)
+
+    @admin.action(description='Reject selected reviews')
+    def admin_reject_reviews(self, request, queryset):
+        queryset.update(is_approved=False)
+
+    def comment_preview(self, obj):
+        return (obj.comment[:120] + '...') if len(obj.comment) > 120 else obj.comment
+    comment_preview.short_description = 'Comment'
 
 
 admin.site.site_header = 'ResearchMate Administration'

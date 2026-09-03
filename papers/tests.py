@@ -12,9 +12,12 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from decimal import Decimal
+from datetime import timedelta
 from reportlab.pdfgen import canvas
 
-from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, PaperSection, QuizQuestion, VivaQuestion
+from .models import AIAnalysis, Flashcard, Glossary, LearningProgress, Paper, PaperContent, PaperSection, QuizAttempt, QuizQuestion, Review, VivaQuestion
+from subscriptions.models import SubscriptionPlan, UserSubscription
 from .prompts.beginner import build_beginner_prompt
 from .prompts.glossary import build_glossary_prompt
 from .prompts.revision_notes import build_revision_notes_prompt
@@ -1524,3 +1527,212 @@ class TechnicalExplanationWordCountTests(TestCase):
         analysis = AIAnalysis.objects.get(paper=paper)
         self.assertEqual(analysis.analysis_status, 'Ready')
         self.assertEqual(analysis.technical_explanation, _tech_text(760))
+
+
+class LearningNavigationTests(TestCase):
+    def test_beginner_page_has_next_button(self):
+        user = User.objects.create_user(username='navbeginner', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Nav Paper', pdf_file='papers/nav.pdf')
+        AIAnalysis.objects.create(paper=paper, beginner_explanation='Beginner content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/papers/1/technical/"')
+        self.assertContains(response, 'Next')
+
+    def test_technical_page_has_next_button(self):
+        user = User.objects.create_user(username='navtechnical', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Tech Paper', pdf_file='papers/navtech.pdf')
+        AIAnalysis.objects.create(paper=paper, technical_explanation='Technical content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/papers/1/sections/"')
+        self.assertContains(response, 'Next')
+
+    def test_notes_page_has_back_to_papers_button(self):
+        user = User.objects.create_user(username='navnotes', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Notes Paper', pdf_file='papers/navnotes.pdf')
+        AIAnalysis.objects.create(paper=paper, revision_notes='Notes content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_notes', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Back to My Papers')
+
+    def test_section_accordion_has_next_button(self):
+        user = User.objects.create_user(username='navsections', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Sections Paper', pdf_file='papers/navsec.pdf')
+        PaperSection.objects.create(paper=paper, title='Abstract', section_order=0, summary='Abstract summary')
+        PaperSection.objects.create(paper=paper, title='Introduction', section_order=1, summary='Intro summary')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_sections', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Abstract')
+        self.assertContains(response, 'Introduction')
+        self.assertContains(response, 'Next')
+
+    def test_quiz_last_question_shows_done_button(self):
+        user = User.objects.create_user(username='quizdone', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Quiz Done Paper', pdf_file='papers/quizdone.pdf')
+        QuizQuestion.objects.create(
+            paper=paper,
+            question='What is the answer?',
+            option_a='A',
+            option_b='B',
+            option_c='C',
+            option_d='D',
+            correct_answer='A',
+            display_order=0,
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_quiz', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Done')
+
+    def test_section_next_navigates_to_next_module(self):
+        user = User.objects.create_user(username='navlast', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Last Paper', pdf_file='papers/navlast.pdf')
+        PaperSection.objects.create(paper=paper, title='Conclusion', section_order=0, summary='Conclusion summary')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_sections', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/papers/1/glossary/"')
+
+    def test_beginner_page_has_no_previous_button(self):
+        user = User.objects.create_user(username='navbeginnerprev', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Nav Paper', pdf_file='papers/nav.pdf')
+        AIAnalysis.objects.create(paper=paper, beginner_explanation='Beginner content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Previous')
+
+    def test_technical_page_has_previous_button(self):
+        user = User.objects.create_user(username='navtechnicalprev', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Tech Paper', pdf_file='papers/navtech.pdf')
+        AIAnalysis.objects.create(paper=paper, technical_explanation='Technical content')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_technical', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Previous')
+        self.assertContains(response, 'href="/papers/1/beginner/"')
+
+    def test_section_page_has_previous_button(self):
+        user = User.objects.create_user(username='navsectionprev', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Nav Section Prev', pdf_file='papers/navsecprev.pdf')
+        PaperSection.objects.create(paper=paper, title='Abstract', section_order=0, summary='Abstract summary')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_sections', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Previous')
+        self.assertContains(response, 'href="/papers/1/technical/"')
+
+
+class PremiumBadgeColorTests(TestCase):
+    def test_basic_user_sees_golden_premium_badges(self):
+        user = User.objects.create_user(username='badgebasic', password='Secret123')
+        paper = Paper.objects.create(owner=user, title='Badge Paper', pdf_file='papers/badge.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'bg-warning text-dark')
+
+    def test_premium_user_sees_green_premium_badges(self):
+        user = User.objects.create_user(username='badgepremium', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Badge Premium Paper', pdf_file='papers/badgeprem.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'bg-success text-white')
+
+    def test_expired_user_sees_golden_premium_badges(self):
+        user = User.objects.create_user(username='badgeexpired', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Premium Weekly',
+            slug='premium-weekly-badge-expired',
+            description='Test plan.',
+            price=Decimal('9.99'),
+            duration_days=7,
+        )
+        UserSubscription.objects.create(
+            user=user,
+            plan=plan,
+            status='ACTIVE',
+            start_date=timezone.now() - timedelta(days=10),
+            end_date=timezone.now() - timedelta(days=3),
+        )
+        paper = Paper.objects.create(owner=user, title='Badge Expired Paper', pdf_file='papers/badgeexp.pdf')
+        self.client.force_login(user)
+        response = self.client.get(reverse('paper_beginner', args=[paper.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'bg-warning text-dark')
+
+
+class ReviewSystemTests(TestCase):
+    def test_authenticated_user_can_submit_review(self):
+        user = User.objects.create_user(username='reviewer', password='Secret123')
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse('review_submit'),
+            {'rating': 5, 'comment': 'Great platform!'},
+        )
+        self.assertRedirects(response, reverse('review_list'))
+        review = Review.objects.get(user=user)
+        self.assertEqual(review.rating, 5)
+        self.assertEqual(review.comment, 'Great platform!')
+        self.assertFalse(review.is_approved)
+
+    def test_review_is_associated_with_authenticated_user(self):
+        user = User.objects.create_user(username='reviewowner', password='Secret123')
+        self.client.force_login(user)
+        self.client.post(
+            reverse('review_submit'),
+            {'rating': 4, 'comment': 'Nice!'},
+        )
+        review = Review.objects.first()
+        self.assertEqual(review.user, user)
+
+    def test_invalid_rating_is_rejected(self):
+        user = User.objects.create_user(username='badrating', password='Secret123')
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse('review_submit'),
+            {'rating': 6, 'comment': 'Great!'},
+        )
+        self.assertRedirects(response, reverse('review_list'))
+        self.assertEqual(Review.objects.count(), 0)
+
+    def test_unapproved_reviews_not_publicly_displayed(self):
+        user = User.objects.create_user(username='unapproved', password='Secret123')
+        Review.objects.create(user=user, rating=5, comment='Secret', is_approved=False)
+        response = self.client.get(reverse('review_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Secret')
+
+    def test_approved_reviews_are_publicly_displayed(self):
+        user = User.objects.create_user(username='approved', password='Secret123')
+        review = Review.objects.create(user=user, rating=5, comment='Public', is_approved=True)
+        response = self.client.get(reverse('review_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Public')
+        self.assertContains(response, user.username)
+
+    def test_users_cannot_submit_review_for_another_user(self):
+        owner = User.objects.create_user(username='owner', password='Secret123')
+        other = User.objects.create_user(username='other', password='Secret123')
+        self.client.force_login(other)
+        self.client.post(
+            reverse('review_submit'),
+            {'rating': 5, 'comment': 'Fake review'},
+        )
+        reviews = Review.objects.filter(user=other)
+        self.assertEqual(reviews.count(), 1)
+        self.assertEqual(reviews.first().user, other)

@@ -120,6 +120,19 @@ def build_workspace_context(user, paper_id, active_tab):
     except ObjectDoesNotExist:
         pass
 
+    from subscriptions.services import user_has_premium_access
+    from .dashboard_service import MODULE_NEXT, MODULE_PREVIOUS, MODULE_URL_NAMES
+
+    next_tab = MODULE_NEXT.get(active_tab)
+    next_module_url = None
+    if next_tab:
+        next_module_url = MODULE_URL_NAMES.get(next_tab)
+
+    previous_tab = MODULE_PREVIOUS.get(active_tab)
+    previous_module_url = None
+    if previous_tab:
+        previous_module_url = MODULE_URL_NAMES.get(previous_tab)
+
     return {
         'paper': paper,
         'active_tab': active_tab,
@@ -133,6 +146,9 @@ def build_workspace_context(user, paper_id, active_tab):
         'viva_questions': viva_questions,
         'section_learning_sections': section_learning_sections,
         'analysis_contributions': analysis_contributions,
+        'is_premium': user_has_premium_access(user),
+        'next_module_url': next_module_url,
+        'previous_module_url': previous_module_url,
     }
 
 
