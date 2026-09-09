@@ -1,0 +1,356 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}{{ paper.title }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'admin_panel:home' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_panel:paper_list' %}">Papers</a></li>
+        <li class="breadcrumb-item active">{{ paper.title }}</li>
+    </ol>
+</nav>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-4">
+        <div class="section-card">
+            <div class="section-title">Paper Information</div>
+            <table class="table table-sm mb-0">
+                <tr><th>ID</th><td>{{ paper.id }}</td></tr>
+                <tr><th>Title</th><td>{{ paper.title }}</td></tr>
+                <tr>
+                    <th>Status</th>
+                    <td>
+                        {% if paper.processing_status == 'Completed' %}
+                            <span class="badge bg-success">Completed</span>
+                        {% elif paper.processing_status == 'Processing' %}
+                            <span class="badge bg-warning">Processing</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Uploaded</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr><th>Uploaded</th><td>{{ paper.uploaded_at|date:"M d, Y H:i" }}</td></tr>
+                <tr><th>File</th><td class="text-break-anywhere">{{ paper.pdf_file.name|default:"-" }}</td></tr>
+            </table>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Owner</div>
+            <table class="table table-sm mb-0">
+                <tr>
+                    <th>Username</th>
+                    <td>
+                        <a href="{% url 'admin_panel:user_detail' paper.owner.id %}">{{ paper.owner.username }}</a>
+                    </td>
+                </tr>
+                <tr><th>Email</th><td>{{ paper.owner.email }}</td></tr>
+                <tr><th>Full Name</th><td>{{ paper.owner.get_full_name|default:"-" }}</td></tr>
+                <tr>
+                    <th>Status</th>
+                    <td>
+                        {% if paper.owner.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">PaperContent</div>
+            {% if paper.content %}
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <th>Extraction Status</th>
+                        <td>
+                            {% if paper.content.extraction_status == 'Ready' %}
+                                <span class="badge bg-success">{{ paper.content.extraction_status }}</span>
+                            {% elif paper.content.extraction_status == 'Failed' %}
+                                <span class="badge bg-danger">{{ paper.content.extraction_status }}</span>
+                            {% elif paper.content.extraction_status == 'Processing' %}
+                                <span class="badge bg-warning">{{ paper.content.extraction_status }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ paper.content.extraction_status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><th>Page Count</th><td>{{ paper.content.page_count }}</td></tr>
+                    <tr><th>Extracted At</th><td>{{ paper.content.extracted_at|date:"M d, Y H:i"|default:"-" }}</td></tr>
+                    <tr><th>Text Length</th><td>{{ paper.content.extracted_text|length }} characters</td></tr>
+                </table>
+                {% if paper.content.extracted_text %}
+                    <details class="mt-2">
+                        <summary class="text-muted small">Extracted text preview</summary>
+                        <pre class="small bg-light p-2 mt-1" style="max-height: 200px; overflow: auto;">{{ paper.content.extracted_text|slice:":1000" }}{% if paper.content.extracted_text|length > 1000 %}...{% endif %}</pre>
+                    </details>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">No PaperContent available.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">AIAnalysis</div>
+            {% if paper.ai_analysis %}
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <th>Status</th>
+                        <td>
+                            <span class="badge bg-info">{{ paper.ai_analysis.analysis_status }}</span>
+                        </td>
+                    </tr>
+                    <tr><th>Model</th><td>{{ paper.ai_analysis.ai_model|default:"-" }}</td></tr>
+                    <tr><th>Generated</th><td>{{ paper.ai_analysis.generated_at|date:"M d, Y H:i"|default:"-" }}</td></tr>
+                    <tr><th>Last Updated</th><td>{{ paper.ai_analysis.last_updated|date:"M d, Y H:i" }}</td></tr>
+                    <tr><th>Overview</th><td>{% if paper.ai_analysis.overview %}Yes{% else %}No{% endif %}</td></tr>
+                    <tr><th>Beginner</th><td>{% if paper.ai_analysis.beginner_explanation %}Yes{% else %}No{% endif %}</td></tr>
+                    <tr><th>Technical</th><td>{% if paper.ai_analysis.technical_explanation %}Yes{% else %}No{% endif %}</td></tr>
+                    <tr><th>Revision Notes</th><td>{% if paper.ai_analysis.revision_notes %}Yes{% else %}No{% endif %}</td></tr>
+                    {% if paper.ai_analysis.analysis_error %}
+                    <tr><th>Error</th><td class="text-danger small">{{ paper.ai_analysis.analysis_error|truncatechars:100 }}</td></tr>
+                    {% endif %}
+                </table>
+            {% else %}
+                <p class="text-muted mb-0">No AIAnalysis available.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">LearningProgress</div>
+            {% if paper.learning_progress %}
+                <table class="table table-sm mb-2">
+                    <tr><th>Overall</th><td>{{ completion_percentage }}%</td></tr>
+                    <tr><th>Last Accessed</th><td>{{ paper.learning_progress.last_accessed|date:"M d, Y H:i"|default:"-" }}</td></tr>
+                </table>
+                <div class="d-flex flex-wrap gap-1">
+                    {% if paper.learning_progress.overview_completed %}<span class="badge bg-success">Overview</span>{% endif %}
+                    {% if paper.learning_progress.beginner_completed %}<span class="badge bg-success">Beginner</span>{% endif %}
+                    {% if paper.learning_progress.technical_completed %}<span class="badge bg-success">Technical</span>{% endif %}
+                    {% if paper.learning_progress.glossary_completed %}<span class="badge bg-success">Glossary</span>{% endif %}
+                    {% if paper.learning_progress.flashcards_completed %}<span class="badge bg-success">Flashcards</span>{% endif %}
+                    {% if paper.learning_progress.quiz_completed %}<span class="badge bg-success">Quiz</span>{% endif %}
+                    {% if paper.learning_progress.viva_completed %}<span class="badge bg-success">Viva</span>{% endif %}
+                    {% if paper.learning_progress.notes_completed %}<span class="badge bg-success">Notes</span>{% endif %}
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No LearningProgress available.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="section-card">
+            <div class="section-title">Glossary ({{ glossary_count }})</div>
+            {% if glossary_terms %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Term</th>
+                                <th>Explanation</th>
+                                <th>Order</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for term in glossary_terms %}
+                                <tr>
+                                    <td>{{ term.term }}</td>
+                                    <td>{{ term.explanation|truncatechars:120 }}</td>
+                                    <td>{{ term.display_order }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if glossary_count > 100 %}
+                    <p class="text-muted small mt-2">Showing first 100 of {{ glossary_count }}.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">No glossary entries found.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Flashcards ({{ flashcard_count }})</div>
+            {% if flashcards %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Question</th>
+                                <th>Answer</th>
+                                <th>Difficulty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for card in flashcards %}
+                                <tr>
+                                    <td>{{ card.question|truncatechars:80 }}</td>
+                                    <td>{{ card.answer|truncatechars:80 }}</td>
+                                    <td>{{ card.difficulty|default:"-" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if flashcard_count > 100 %}
+                    <p class="text-muted small mt-2">Showing first 100 of {{ flashcard_count }}.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">No flashcards found.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Quiz Questions ({{ quiz_question_count }})</div>
+            {% if quiz_questions %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Question</th>
+                                <th>Correct</th>
+                                <th>Difficulty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for q in quiz_questions %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ q.question|truncatechars:80 }}</td>
+                                    <td>{{ q.correct_answer }}</td>
+                                    <td>{{ q.difficulty|default:"-" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if quiz_question_count > 100 %}
+                    <p class="text-muted small mt-2">Showing first 100 of {{ quiz_question_count }}.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">No quiz questions found.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Quiz Attempts ({{ quiz_attempt_count }})</div>
+            {% if quiz_attempts %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Score</th>
+                                <th>Correct / Total</th>
+                                <th>Passed</th>
+                                <th>Completed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for attempt in quiz_attempts %}
+                                <tr>
+                                    <td>{{ attempt.percentage }}%</td>
+                                    <td>{{ attempt.correct_answers }} / {{ attempt.total_questions }}</td>
+                                    <td>
+                                        {% if attempt.passed %}
+                                            <span class="badge bg-success">Passed</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Failed</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ attempt.completed_at|date:"M d, Y H:i" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if quiz_attempt_count > 50 %}
+                    <p class="text-muted small mt-2">Showing first 50 of {{ quiz_attempt_count }}.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">No quiz attempts found.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Viva Questions ({{ viva_question_count }})</div>
+            {% if viva_questions %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Question</th>
+                                <th>Category</th>
+                                <th>Difficulty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for q in viva_questions %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ q.question|truncatechars:80 }}</td>
+                                    <td>{{ q.category|default:"-" }}</td>
+                                    <td>{{ q.difficulty|default:"-" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if viva_question_count > 100 %}
+                    <p class="text-muted small mt-2">Showing first 100 of {{ viva_question_count }}.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">No viva questions found.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Paper Sections ({{ section_count }})</div>
+            {% if paper_sections %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Title</th>
+                                <th>Generated</th>
+                                <th>Key Points</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for section in paper_sections %}
+                                <tr>
+                                    <td>{{ section.section_order }}</td>
+                                    <td>{{ section.title }}</td>
+                                    <td>
+                                        {% if section.is_generated %}
+                                            <span class="badge bg-success">Yes</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">No</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ section.key_points|length }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if section_count > 100 %}
+                    <p class="text-muted small mt-2">Showing first 100 of {{ section_count }}.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">No paper sections found.</p>
+            {% endif %}
+        </div>
+
+        <div class="text-end">
+            <a href="{% url 'admin_panel:paper_list' %}" class="btn btn-outline-secondary">Back to Papers</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

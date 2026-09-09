@@ -1,0 +1,51 @@
+from django.urls import path
+
+from .views import (
+    admin_change_password_view,
+    admin_login_view,
+    admin_logout_view,
+    admin_panel_home,
+    extend_subscription_view,
+    grant_subscription_view,
+    paper_detail,
+    paper_list,
+    payment_detail,
+    payment_list,
+    plan_create,
+    plan_edit,
+    plan_list,
+    revoke_subscription_view,
+    subscription_detail,
+    subscription_list,
+    toggle_user_active,
+    user_detail,
+    user_edit,
+    user_list,
+    user_reset_password,
+)
+
+app_name = 'admin_panel'
+
+urlpatterns = [
+    path('login/', admin_login_view, name='login'),
+    path('logout/', admin_logout_view, name='logout'),
+    path('', admin_panel_home, name='home'),
+    path('profile/change-password/', admin_change_password_view, name='admin_change_password'),
+    path('users/', user_list, name='user_list'),
+    path('users/<int:user_id>/', user_detail, name='user_detail'),
+    path('users/<int:user_id>/edit/', user_edit, name='user_edit'),
+    path('users/<int:user_id>/reset-password/', user_reset_password, name='user_reset_password'),
+    path('users/<int:user_id>/toggle-active/', toggle_user_active, name='toggle_user_active'),
+    path('papers/', paper_list, name='paper_list'),
+    path('papers/<int:paper_id>/', paper_detail, name='paper_detail'),
+    path('subscriptions/', subscription_list, name='subscription_list'),
+    path('subscriptions/plans/', plan_list, name='plan_list'),
+    path('subscriptions/plans/add/', plan_create, name='plan_create'),
+    path('subscriptions/plans/<int:plan_id>/edit/', plan_edit, name='plan_edit'),
+    path('subscriptions/<int:subscription_id>/', subscription_detail, name='subscription_detail'),
+    path('subscriptions/<int:subscription_id>/grant/', grant_subscription_view, name='subscription_grant'),
+    path('subscriptions/<int:subscription_id>/revoke/', revoke_subscription_view, name='subscription_revoke'),
+    path('subscriptions/<int:subscription_id>/extend/', extend_subscription_view, name='subscription_extend'),
+    path('payments/', payment_list, name='payment_list'),
+    path('payments/<int:payment_id>/', payment_detail, name='payment_detail'),
+]
