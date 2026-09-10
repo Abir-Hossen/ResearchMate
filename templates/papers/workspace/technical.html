@@ -21,7 +21,7 @@
             </article>
         {% else %}
             <div class="empty-state rounded-4 p-4 p-lg-5">
-                <form method="post" action="{% url 'paper_technical' paper.id %}">
+                <form method="post" action="{% url 'paper_technical' paper.id %}" data-submit-text="Generating Technical Explanation...">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-primary btn-lg">Generate Technical Explanation</button>
                 </form>

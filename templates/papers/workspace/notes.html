@@ -27,7 +27,7 @@
             </article>
         {% else %}
             <div class="empty-state rounded-4 p-4 p-lg-5">
-                <form method="post">
+                <form method="post" data-submit-text="Generating Revision Notes...">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-primary btn-lg">Generate Revision Notes</button>
                 </form>

@@ -10,7 +10,7 @@
             </div>
             <div class="d-flex gap-2 flex-wrap">
                 {% if not glossary_terms %}
-                <form method="post" class="ms-auto">
+                <form method="post" class="ms-auto" data-submit-text="Generating Glossary...">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-primary btn-sm">Generate Glossary</button>
                 </form>

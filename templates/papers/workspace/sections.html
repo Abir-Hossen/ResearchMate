@@ -40,7 +40,7 @@
             {% endif %}
         {% else %}
             <div class="empty-state rounded-4 p-4 p-lg-5">
-                <form method="post" action="{% url 'paper_sections' paper.id %}">
+                <form method="post" action="{% url 'paper_sections' paper.id %}" data-submit-text="Generating Section Learning...">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-primary btn-lg">Generate Section Learning</button>
                 </form>
