@@ -4,10 +4,15 @@
 {% block workspace_content %}
 <div class="card border-0 shadow-sm technical-shell">
     <div class="card-body p-4 p-lg-5">
-        <div class="mb-4">
-            <p class="text-uppercase text-muted fw-semibold mb-2 letter-space">Technical Explanation</p>
-            <h4 class="display-6 fw-bold mb-3">Technical Explanation</h4>
-            <p class="lead text-muted mb-0">Explore the research methodology, algorithms, datasets, and technical concepts through a structured academic explanation designed for undergraduate learners.</p>
+        <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+            <div>
+                <p class="text-uppercase text-muted fw-semibold mb-2 letter-space">Technical Explanation</p>
+                <h4 class="display-6 fw-bold mb-3">Technical Explanation</h4>
+                <p class="lead text-muted mb-0">Explore the research methodology, algorithms, datasets, and technical concepts through a structured academic explanation designed for undergraduate learners.</p>
+            </div>
+            {% if analysis and analysis.technical_explanation %}
+            <a class="btn btn-outline-primary btn-sm ms-auto" href="{% url 'paper_technical_download' paper.id %}">Download PDF</a>
+            {% endif %}
         </div>
 
         {% if analysis and analysis.technical_explanation %}
