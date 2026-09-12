@@ -9,7 +9,7 @@
                 <p class="text-muted mb-0">Answer one question at a time and review your results at the end.</p>
             </div>
             {% if quiz_questions %}
-                <form method="post" class="d-inline">
+                <form method="post" class="d-inline" data-submit-text="Generating Quiz...">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="generate">
                     <button class="btn btn-outline-primary btn-sm" type="submit">Generate Quiz</button>
@@ -26,7 +26,7 @@
         {% if not quiz_questions %}
             <div class="empty-state">
                 <p class="text-muted mb-3">No quiz questions have been generated yet.</p>
-                <form method="post">
+                <form method="post" data-submit-text="Generating Quiz...">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="generate">
                     <button class="btn btn-primary" type="submit">Generate Quiz</button>
@@ -61,7 +61,7 @@
                     {% if next_module_url %}
                     <a class="btn btn-primary" href="{% url next_module_url paper.id %}">Done</a>
                     {% endif %}
-                    <form method="post" class="d-inline">
+                    <form method="post" class="d-inline" data-submit-text="Generating Quiz...">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="generate">
                         <button class="btn btn-outline-primary" type="submit">Try Again</button>
@@ -69,7 +69,7 @@
                 </div>
             </div>
             {% else %}
-            <form method="post" class="mt-4 d-inline">
+            <form method="post" class="mt-4 d-inline" data-submit-text="Generating Quiz...">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="generate">
                 <button class="btn btn-outline-primary" type="submit">Try Again</button>

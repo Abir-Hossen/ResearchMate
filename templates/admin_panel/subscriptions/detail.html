@@ -1,0 +1,175 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Subscription #{{ subscription.id }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'admin_panel:home' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_panel:subscription_list' %}">Subscriptions</a></li>
+        <li class="breadcrumb-item active">#{{ subscription.id }}</li>
+    </ol>
+</nav>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-4">
+        <div class="section-card">
+            <div class="section-title">Subscription Information</div>
+            <table class="table table-sm mb-0">
+                <tr><th>ID</th><td>{{ subscription.id }}</td></tr>
+                <tr>
+                    <th>Status</th>
+                    <td>
+                        {% if subscription.status == 'ACTIVE' %}
+                            <span class="badge bg-success">Active</span>
+                        {% elif subscription.status == 'EXPIRED' %}
+                            <span class="badge bg-secondary">Expired</span>
+                        {% elif subscription.status == 'CANCELLED' %}
+                            <span class="badge bg-danger">Cancelled</span>
+                        {% else %}
+                            <span class="badge bg-warning">{{ subscription.status }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Source</th>
+                    <td>
+                        {% if subscription.source == 'ADMIN' %}
+                            <span class="badge bg-info">Admin</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Payment</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr><th>Start Date</th><td>{{ subscription.start_date|date:"M d, Y H:i"|default:"-" }}</td></tr>
+                <tr><th>End Date</th><td>{{ subscription.end_date|date:"M d, Y H:i"|default:"-" }}</td></tr>
+                <tr><th>Created</th><td>{{ subscription.created_at|date:"M d, Y H:i" }}</td></tr>
+                <tr><th>Updated</th><td>{{ subscription.updated_at|date:"M d, Y H:i" }}</td></tr>
+            </table>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">User</div>
+            <table class="table table-sm mb-0">
+                <tr>
+                    <th>Username</th>
+                    <td><a href="{% url 'admin_panel:user_detail' subscription.user.id %}">{{ subscription.user.username }}</a></td>
+                </tr>
+                <tr><th>Email</th><td>{{ subscription.user.email }}</td></tr>
+                <tr><th>Full Name</th><td>{{ subscription.user.get_full_name|default:"-" }}</td></tr>
+                <tr>
+                    <th>Account Status</th>
+                    <td>
+                        {% if subscription.user.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Subscription Plan</div>
+            <table class="table table-sm mb-0">
+                <tr><th>Name</th><td>{{ subscription.plan.name }}</td></tr>
+                <tr><th>Slug</th><td>{{ subscription.plan.slug }}</td></tr>
+                <tr><th>Price</th><td>BDT {{ subscription.plan.price }}</td></tr>
+                <tr><th>Duration</th><td>{{ subscription.plan.duration_days }} days</td></tr>
+                <tr>
+                    <th>Plan Status</th>
+                    <td>
+                        {% if subscription.plan.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Premium Access</div>
+            <p class="mb-0">
+                {% if has_premium %}
+                    <span class="badge bg-success">Active</span> User currently has Premium access.
+                {% else %}
+                    <span class="badge bg-secondary">No Premium</span> User does not have Premium access.
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Actions</div>
+            <div class="d-grid gap-2">
+                <a href="{% url 'admin_panel:subscription_grant' subscription.id %}" class="btn btn-success btn-sm">Grant Premium</a>
+                {% if subscription.status == 'ACTIVE' %}
+                    <a href="{% url 'admin_panel:subscription_revoke' subscription.id %}" class="btn btn-warning btn-sm">Revoke Premium</a>
+                    <a href="{% url 'admin_panel:subscription_extend' subscription.id %}" class="btn btn-primary btn-sm">Extend Premium</a>
+                {% else %}
+                    <button class="btn btn-warning btn-sm" disabled>Revoke Premium (not active)</button>
+                    <button class="btn btn-primary btn-sm" disabled>Extend Premium (not active)</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="section-card">
+            <div class="section-title">User Subscription History</div>
+            {% if user_subscriptions %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Source</th>
+                                <th>Start</th>
+                                <th>End</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in user_subscriptions %}
+                                <tr>
+                                    <td>{{ sub.id }}</td>
+                                    <td>{{ sub.plan.name }}</td>
+                                    <td>
+                                        {% if sub.status == 'ACTIVE' %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% elif sub.status == 'EXPIRED' %}
+                                            <span class="badge bg-secondary">Expired</span>
+                                        {% elif sub.status == 'CANCELLED' %}
+                                            <span class="badge bg-danger">Cancelled</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ sub.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if sub.source == 'ADMIN' %}
+                                            <span class="badge bg-info">Admin</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Payment</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ sub.start_date|date:"M d, Y"|default:"-" }}</td>
+                                    <td>{{ sub.end_date|date:"M d, Y"|default:"-" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No subscription history for this user.</p>
+            {% endif %}
+        </div>
+
+        <div class="text-end">
+            <a href="{% url 'admin_panel:subscription_list' %}" class="btn btn-outline-secondary">Back to Subscriptions</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

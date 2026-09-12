@@ -13,12 +13,16 @@
                     Prepare for thesis-style discussions with paper-specific viva questions and examiner tips.
                 </p>
             </div>
-            {% if not viva_questions %}
-                <form method="post">
+            <div class="d-flex gap-2 flex-wrap">
+                {% if not viva_questions %}
+                <form method="post" data-submit-text="Generating Viva Questions...">
                     {% csrf_token %}
                     <button class="btn btn-primary" type="submit">Generate Viva Questions</button>
                 </form>
-            {% endif %}
+                {% else %}
+                <a class="btn btn-outline-primary" href="{% url 'paper_viva_download' paper.id %}">Download PDF</a>
+                {% endif %}
+            </div>
         </div>
 
         {% if messages %}

@@ -1,0 +1,96 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <div class="col-12 col-md-6 col-xl">
+        <div class="stat-card">
+            <div class="stat-label">Total Users</div>
+            <div class="stat-value">{{ metrics.total_users }}</div>
+            <div class="stat-sub">{{ metrics.active_users }} active</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl">
+        <div class="stat-card">
+            <div class="stat-label">Total Papers</div>
+            <div class="stat-value">{{ metrics.total_papers }}</div>
+            <div class="stat-sub">{{ metrics.papers_completed }} completed</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl">
+        <div class="stat-card">
+            <div class="stat-label">Active Subscriptions</div>
+            <div class="stat-value">{{ metrics.active_subscriptions }}</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl">
+        <div class="stat-card">
+            <div class="stat-label">Successful Payments</div>
+            <div class="stat-value">{{ metrics.successful_payments }}</div>
+            <div class="stat-sub">Revenue: BDT {{ metrics.total_revenue|floatformat:2 }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-6">
+        <div class="section-card">
+            <div class="section-title">Paper Processing Status</div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th class="text-end">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Uploaded</td>
+                            <td class="text-end">{{ metrics.papers_uploaded }}</td>
+                        </tr>
+                        <tr>
+                            <td>Processing</td>
+                            <td class="text-end">{{ metrics.papers_processing }}</td>
+                        </tr>
+                        <tr>
+                            <td>Completed</td>
+                            <td class="text-end">{{ metrics.papers_completed }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-6">
+        <div class="section-card">
+            <div class="section-title">AI Analysis Status</div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th class="text-end">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Total Analyses</td>
+                            <td class="text-end">{{ metrics.total_ai_analyses }}</td>
+                        </tr>
+                        <tr>
+                            <td>Failed</td>
+                            <td class="text-end">{{ metrics.failed_ai_analyses }}</td>
+                        </tr>
+                        <tr>
+                            <td>Ready / Processing / Pending</td>
+                            <td class="text-end">{{ metrics.ready_ai_analyses }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

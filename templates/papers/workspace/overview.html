@@ -24,7 +24,7 @@
         <div class="mt-4 d-flex gap-2 flex-wrap">
             <a class="btn btn-primary" href="{{ paper.pdf_file.url }}" target="_blank">View PDF</a>
             <a class="btn btn-outline-secondary" href="{{ paper.pdf_file.url }}" download>Download PDF</a>
-            <form method="post" action="{% url 'start_learning' paper.id %}" class="d-inline">
+            <form method="post" action="{% url 'start_learning' paper.id %}" class="d-inline" data-submit-text="Starting Learning...">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-outline-primary">Start Learning</button>
             </form>

@@ -25,6 +25,7 @@ from papers.views import groq_test_view
 urlpatterns = [
     path('', home_view, name='home'),
     path('admin/', admin.site.urls),
+    path('admin-panel/', include('admin_panel.urls')),
     path('accounts/', include('accounts.urls')),
     path('papers/', include('papers.urls')),
     path('subscriptions/', include('subscriptions.urls')),
@@ -33,3 +34,4 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+

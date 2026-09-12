@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResearchMate Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --research-bg: #f3f7fb;
+            --research-surface: #ffffff;
+            --research-border: #d9e5f2;
+            --research-text: #1f2937;
+            --research-muted: #5f6b7a;
+            --research-primary: #1f64d8;
+            --research-primary-soft: #e8f1ff;
+            --research-success: #1f8a5d;
+            --research-success-soft: #e7f9f1;
+            --research-warning: #b76f00;
+            --research-warning-soft: #fff4d9;
+            --research-danger: #c73b39;
+            --research-danger-soft: #fdecec;
+            --sidebar-width: 260px;
+        }
+
+        body {
+            background: var(--research-bg);
+            color: var(--research-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        .admin-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            background: #0f172a;
+            color: #e2e8f0;
+            flex-shrink: 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 1040;
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 1.5rem 1.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-brand h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0;
+            color: #ffffff;
+        }
+
+        .sidebar-brand small {
+            display: block;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 0.25rem;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0.75rem;
+            list-style: none;
+            margin: 0;
+        }
+
+        .sidebar-nav li {
+            margin-bottom: 0.25rem;
+        }
+
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar-nav a:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #f1f5f9;
+        }
+
+        .sidebar-nav a.active {
+            background: var(--research-primary);
+            color: #ffffff;
+        }
+
+        .sidebar-nav a.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+
+        .sidebar-nav .bi {
+            font-size: 1.1rem;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .topbar {
+            background: var(--research-surface);
+            border-bottom: 1px solid var(--research-border);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+        }
+
+        .topbar h2 {
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .topbar-user {
+            font-size: 0.9rem;
+            color: var(--research-muted);
+        }
+
+        .page-content {
+            padding: 2rem;
+            flex: 1;
+        }
+
+        .stat-card {
+            border: 1px solid var(--research-border);
+            border-radius: 1rem;
+            background: var(--research-surface);
+            box-shadow: var(--research-shadow);
+            padding: 1.25rem;
+            height: 100%;
+            transition: transform 0.15s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--research-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #16263d;
+            margin: 0;
+        }
+
+        .stat-sub {
+            font-size: 0.8rem;
+            color: var(--research-muted);
+            margin-top: 0.25rem;
+        }
+
+        .section-card {
+            border: 1px solid var(--research-border);
+            border-radius: 1rem;
+            background: var(--research-surface);
+            box-shadow: var(--research-shadow);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .text-break-anywhere {
+            word-break: break-all;
+            overflow-wrap: anywhere;
+        }
+
+        .nav-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .nav-list li {
+            padding: 0.6rem 0;
+            border-bottom: 1px solid #eef2f6;
+        }
+
+        .nav-list li:last-child {
+            border-bottom: none;
+        }
+
+        @media (max-width: 767.98px) {
+            .sidebar {
+                position: relative;
+                width: 100%;
+                bottom: auto;
+            }
+
+            .admin-wrapper {
+                flex-direction: column;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .page-content {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-wrapper">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <h1>ResearchMate</h1>
+                <small>Custom Admin Panel</small>
+            </div>
+            <ul class="sidebar-nav">
+                <li>
+                    <a href="{% url 'admin_panel:home' %}" class="{% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'admin_panel:user_list' %}" class="{% if 'user' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="bi bi-people"></i> Users
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'admin_panel:paper_list' %}" class="{% if 'paper' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="bi bi-journal-text"></i> Papers
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'admin_panel:subscription_list' %}" class="{% if 'subscription' in request.resolver_match.url_name or 'plan' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="bi bi-credit-card"></i> Subscriptions
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'admin_panel:payment_list' %}" class="{% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="bi bi-cash-stack"></i> Payments
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'admin_panel:plan_list' %}" class="{% if request.resolver_match.url_name == 'plan_list' or request.resolver_match.url_name == 'plan_create' or request.resolver_match.url_name == 'plan_edit' %}active{% endif %}">
+                        <i class="bi bi-diagram-3"></i> Subscription Plans
+                    </a>
+                </li>
+            </ul>
+        </aside>
+
+        <div class="main-content">
+            <header class="topbar">
+                <h2>{% block page_title %}Dashboard{% endblock %}</h2>
+                <div class="topbar-actions">
+                    <span class="topbar-user">
+                        <i class="bi bi-person-circle"></i> {{ user.get_short_name|default:user.username }}
+                        {% if user.is_superuser %}<span class="badge bg-danger ms-1">Superuser</span>{% endif %}
+                    </span>
+                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'dashboard' %}" target="_blank">Open App</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'admin_panel:admin_change_password' %}">Change Password</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'logout' %}">Logout</a>
+                </div>
+            </header>
+
+            <main class="page-content">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+

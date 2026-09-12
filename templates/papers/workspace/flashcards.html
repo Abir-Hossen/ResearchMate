@@ -10,7 +10,7 @@
                 <p class="text-muted mb-0">Flip cards to reveal answers, review context, and focus on why each concept matters for this research.</p>
             </div>
             {% if not flashcards %}
-            <form method="post" class="ms-auto">
+            <form method="post" class="ms-auto" data-submit-text="Generating Flashcards...">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-primary btn-lg">Generate Flashcards</button>
             </form>
@@ -65,7 +65,7 @@
         <div class="card-body">
             <h3 class="h5 mb-3">No flashcards yet</h3>
             <p class="text-muted mb-4">Generate paper-specific flashcards to begin studying the most important ideas in this research.</p>
-            <form method="post">
+            <form method="post" data-submit-text="Generating Flashcards...">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-primary btn-lg">Generate Flashcards</button>
             </form>

@@ -4,10 +4,15 @@
 {% block workspace_content %}
 <div class="card border-0 shadow-sm notes-shell">
     <div class="card-body p-4 p-lg-5">
-        <div class="mb-4">
-            <p class="text-uppercase text-muted fw-semibold mb-2 letter-space">Revision Notes</p>
-            <h4 class="display-6 fw-bold mb-3">Revision Notes</h4>
-            <p class="lead text-muted mb-0">A concise study sheet highlighting the problem, methods, dataset, results, and key takeaways from the paper.</p>
+        <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+            <div>
+                <p class="text-uppercase text-muted fw-semibold mb-2 letter-space">Revision Notes</p>
+                <h4 class="display-6 fw-bold mb-3">Revision Notes</h4>
+                <p class="lead text-muted mb-0">A concise study sheet highlighting the problem, methods, dataset, results, and key takeaways from the paper.</p>
+            </div>
+            {% if revision_notes %}
+            <a class="btn btn-outline-primary btn-sm ms-auto" href="{% url 'paper_notes_download' paper.id %}">Download PDF</a>
+            {% endif %}
         </div>
 
         {% if messages %}
@@ -22,7 +27,7 @@
             </article>
         {% else %}
             <div class="empty-state rounded-4 p-4 p-lg-5">
-                <form method="post">
+                <form method="post" data-submit-text="Generating Revision Notes...">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-primary btn-lg">Generate Revision Notes</button>
                 </form>

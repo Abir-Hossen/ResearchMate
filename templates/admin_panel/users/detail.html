@@ -1,0 +1,237 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}{{ user_obj.username }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-12 col-lg-4">
+        <div class="section-card">
+            <div class="section-title">User Information</div>
+            <table class="table table-sm mb-0">
+                <tr>
+                    <th>Username</th>
+                    <td>{{ user_obj.username }}</td>
+                </tr>
+                <tr>
+                    <th>Email</th>
+                    <td>{{ user_obj.email }}</td>
+                </tr>
+                <tr>
+                    <th>First Name</th>
+                    <td>{{ user_obj.first_name|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <th>Last Name</th>
+                    <td>{{ user_obj.last_name|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <th>Status</th>
+                    <td>
+                        {% if user_obj.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Staff</th>
+                    <td>{% if user_obj.is_staff %}Yes{% else %}No{% endif %}</td>
+                </tr>
+                <tr>
+                    <th>Superuser</th>
+                    <td>{% if user_obj.is_superuser %}Yes{% else %}No{% endif %}</td>
+                </tr>
+                <tr>
+                    <th>Date Joined</th>
+                    <td>{{ user_obj.date_joined|date:"M d, Y" }}</td>
+                </tr>
+                <tr>
+                    <th>Last Login</th>
+                    <td>{{ user_obj.last_login|date:"M d, Y" }}</td>
+                </tr>
+            </table>
+
+            {% if user_obj != request.user %}
+                <form method="post" action="{% url 'admin_panel:toggle_user_active' user_obj.id %}" class="mt-3">
+                    {% csrf_token %}
+                    <button type="submit" class="btn {% if user_obj.is_active %}btn-warning{% else %}btn-success{% endif %} btn-sm w-100">
+                        {% if user_obj.is_active %}Deactivate User{% else %}Activate User{% endif %}
+                    </button>
+                </form>
+                <div class="d-grid gap-2 mt-2">
+                    <a href="{% url 'admin_panel:user_edit' user_obj.id %}" class="btn btn-outline-primary btn-sm">Edit User</a>
+                    <a href="{% url 'admin_panel:user_reset_password' user_obj.id %}" class="btn btn-outline-warning btn-sm">Reset Password</a>
+                </div>
+            {% else %}
+                <div class="alert alert-info mt-3 mb-0">You cannot change your own active status.</div>
+                <a href="{% url 'admin_panel:admin_change_password' %}" class="btn btn-outline-primary btn-sm mt-2">Change Your Password</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="section-card">
+            <div class="section-title">Papers ({{ papers|length }})</div>
+            {% if papers %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Status</th>
+                                <th>Uploaded</th>
+                                <th>AI</th>
+                                <th>Quiz</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for paper in papers %}
+                                <tr>
+                                    <td>{{ paper.title }}</td>
+                                    <td>
+                                        {% if paper.processing_status == 'Completed' %}
+                                            <span class="badge bg-success">Completed</span>
+                                        {% elif paper.processing_status == 'Processing' %}
+                                            <span class="badge bg-warning">Processing</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Uploaded</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ paper.uploaded_at|date:"M d, Y" }}</td>
+                                    <td>
+                                        {% if paper.ai_analysis %}
+                                            <span class="badge bg-info">{{ paper.ai_analysis.analysis_status }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ paper.quiz_attempts.count }} attempts</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No papers uploaded yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Subscriptions</div>
+            {% if subscriptions %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Start</th>
+                                <th>End</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in subscriptions %}
+                                <tr>
+                                    <td>{{ sub.plan.name }}</td>
+                                    <td>
+                                        {% if sub.status == 'ACTIVE' %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% elif sub.status == 'EXPIRED' %}
+                                            <span class="badge bg-secondary">Expired</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">{{ sub.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ sub.start_date|date:"M d, Y"|default:"-" }}</td>
+                                    <td>{{ sub.end_date|date:"M d, Y"|default:"-" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No subscriptions found.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Payment Transactions</div>
+            {% if payments %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Transaction ID</th>
+                                <th>Plan</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in payments %}
+                                <tr>
+                                    <td>{{ payment.transaction_id }}</td>
+                                    <td>{{ payment.plan.name }}</td>
+                                    <td>BDT {{ payment.amount }}</td>
+                                    <td>
+                                        {% if payment.status == 'SUCCESS' %}
+                                            <span class="badge bg-success">Success</span>
+                                        {% elif payment.status == 'FAILED' %}
+                                            <span class="badge bg-danger">Failed</span>
+                                        {% elif payment.status == 'PENDING' %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ payment.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ payment.created_at|date:"M d, Y" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No payment transactions found.</p>
+            {% endif %}
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Reviews</div>
+            {% if reviews %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Rating</th>
+                                <th>Comment</th>
+                                <th>Approved</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for review in reviews %}
+                                <tr>
+                                    <td>{{ review.rating }}/5</td>
+                                    <td>{{ review.comment|truncatechars:120 }}</td>
+                                    <td>
+                                        {% if review.is_approved %}
+                                            <span class="badge bg-success">Yes</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ review.created_at|date:"M d, Y" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No reviews found.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

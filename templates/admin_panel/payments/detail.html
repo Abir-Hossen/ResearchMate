@@ -1,0 +1,118 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Payment #{{ payment.id }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'admin_panel:home' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_panel:payment_list' %}">Payments</a></li>
+        <li class="breadcrumb-item active">{{ payment.transaction_id }}</li>
+    </ol>
+</nav>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-4">
+        <div class="section-card">
+            <div class="section-title">Transaction Information</div>
+            <table class="table table-sm mb-0">
+                <tr><th>ID</th><td>{{ payment.id }}</td></tr>
+                <tr><th>Transaction ID</th><td>{{ payment.transaction_id }}</td></tr>
+                <tr>
+                    <th>Status</th>
+                    <td>
+                        {% if payment.status == 'SUCCESS' %}
+                            <span class="badge bg-success">Success</span>
+                        {% elif payment.status == 'FAILED' %}
+                            <span class="badge bg-danger">Failed</span>
+                        {% elif payment.status == 'CANCELLED' %}
+                            <span class="badge bg-secondary">Cancelled</span>
+                        {% elif payment.status == 'PENDING' %}
+                            <span class="badge bg-warning">Pending</span>
+                        {% else %}
+                            <span class="badge bg-info">{{ payment.status }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr><th>Amount</th><td>BDT {{ payment.amount }}</td></tr>
+                <tr><th>Currency</th><td>{{ payment.currency }}</td></tr>
+                <tr><th>Gateway</th><td>{{ payment.payment_gateway }}</td></tr>
+                {% if payment.gateway_transaction_id %}
+                    <tr><th>Gateway Ref</th><td>{{ payment.gateway_transaction_id }}</td></tr>
+                {% endif %}
+                <tr><th>Initiated</th><td>{{ payment.initiated_at|date:"M d, Y H:i"|default:"-" }}</td></tr>
+                <tr><th>Completed</th><td>{{ payment.completed_at|date:"M d, Y H:i"|default:"-" }}</td></tr>
+                <tr><th>Verified</th><td>{{ payment.verified_at|date:"M d, Y H:i"|default:"-" }}</td></tr>
+                <tr><th>Created</th><td>{{ payment.created_at|date:"M d, Y H:i" }}</td></tr>
+                <tr><th>Updated</th><td>{{ payment.updated_at|date:"M d, Y H:i" }}</td></tr>
+            </table>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">User</div>
+            <table class="table table-sm mb-0">
+                <tr>
+                    <th>Username</th>
+                    <td><a href="{% url 'admin_panel:user_detail' payment.user.id %}">{{ payment.user.username }}</a></td>
+                </tr>
+                <tr><th>Email</th><td>{{ payment.user.email }}</td></tr>
+                <tr><th>Full Name</th><td>{{ payment.user.get_full_name|default:"-" }}</td></tr>
+                <tr>
+                    <th>Account Status</th>
+                    <td>
+                        {% if payment.user.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title">Subscription Plan</div>
+            <table class="table table-sm mb-0">
+                <tr><th>Name</th><td>{{ payment.plan.name }}</td></tr>
+                <tr><th>Slug</th><td>{{ payment.plan.slug }}</td></tr>
+                <tr><th>Price</th><td>BDT {{ payment.plan.price }}</td></tr>
+                <tr><th>Duration</th><td>{{ payment.plan.duration_days }} days</td></tr>
+                <tr>
+                    <th>Plan Status</th>
+                    <td>
+                        {% if payment.plan.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        {% if payment.failure_reason %}
+            <div class="section-card">
+                <div class="section-title">Failure Reason</div>
+                <div class="alert alert-danger mb-0">
+                    {{ payment.failure_reason }}
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="section-card">
+            <div class="section-title">Administrative Notes</div>
+            <p class="text-muted small mb-0">
+                This payment record is part of the existing ResearchMate payment flow. 
+                The transaction status, verification, and subscription activation are handled by the existing payment services and SSLCOMMERZ integration.
+                Do not modify payment records directly from this interface.
+            </p>
+        </div>
+
+        <div class="text-end">
+            <a href="{% url 'admin_panel:payment_list' %}" class="btn btn-outline-secondary">Back to Payments</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

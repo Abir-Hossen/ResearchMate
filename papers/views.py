@@ -34,6 +34,13 @@ from .services import (
 from .section_learning_service import SectionLearningError, generate_section_learning
 from .technical_service import TechnicalExplanationError, generate_technical_explanation
 from .utils import format_file_size
+from .pdf_service import (
+    generate_beginner_pdf,
+    generate_technical_pdf,
+    generate_glossary_pdf,
+    generate_viva_pdf,
+    generate_revision_notes_pdf,
+)
 from django.http import HttpResponse
 from django.conf import settings
 from .groq_connectivity import GroqLearningService
@@ -395,6 +402,68 @@ def paper_notes(request, paper_id):
     analysis = paper.ai_analysis if hasattr(paper, 'ai_analysis') else None
     context['revision_notes'] = analysis.revision_notes if analysis else ''
     return render(request, 'papers/workspace/notes.html', context)
+
+
+@login_required(login_url='login')
+def download_beginner_pdf(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+    analysis = paper.ai_analysis if hasattr(paper, 'ai_analysis') else None
+
+    if not analysis or not analysis.beginner_explanation:
+        messages.error(request, 'Beginner Explanation has not been generated yet.')
+        return redirect('paper_beginner', paper_id=paper.id)
+
+    return generate_beginner_pdf(paper, analysis)
+
+
+@login_required(login_url='login')
+@premium_required
+def download_technical_pdf(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+    analysis = paper.ai_analysis if hasattr(paper, 'ai_analysis') else None
+
+    if not analysis or not analysis.technical_explanation:
+        messages.error(request, 'Technical Explanation has not been generated yet.')
+        return redirect('paper_technical', paper_id=paper.id)
+
+    return generate_technical_pdf(paper, analysis)
+
+
+@login_required(login_url='login')
+@premium_required
+def download_glossary_pdf(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+
+    if not paper.glossary_terms.exists():
+        messages.error(request, 'Glossary has not been generated yet.')
+        return redirect('paper_glossary', paper_id=paper.id)
+
+    return generate_glossary_pdf(paper)
+
+
+@login_required(login_url='login')
+@premium_required
+def download_viva_pdf(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+
+    if not paper.viva_questions.exists():
+        messages.error(request, 'Viva Preparation has not been generated yet.')
+        return redirect('paper_viva', paper_id=paper.id)
+
+    return generate_viva_pdf(paper)
+
+
+@login_required(login_url='login')
+@premium_required
+def download_revision_notes_pdf(request, paper_id):
+    paper = get_user_paper(request.user, paper_id)
+    analysis = paper.ai_analysis if hasattr(paper, 'ai_analysis') else None
+
+    if not analysis or not analysis.revision_notes:
+        messages.error(request, 'Revision Notes have not been generated yet.')
+        return redirect('paper_notes', paper_id=paper.id)
+
+    return generate_revision_notes_pdf(paper, analysis)
 
 
 def review_list_view(request):

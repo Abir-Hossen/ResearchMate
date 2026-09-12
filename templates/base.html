@@ -310,11 +310,20 @@
             document.querySelectorAll('form[data-submit-text]').forEach((form) => {
                 const btn = form.querySelector('button[type="submit"]');
                 if (!btn) return;
-                form.addEventListener('submit', () => {
+                form.addEventListener('submit', (e) => {
+                    // Prevent double submission
+                    if (btn.disabled) {
+                        e.preventDefault();
+                        return;
+                    }
                     btn.disabled = true;
-                    const original = btn.dataset.originalText || btn.textContent;
+                    btn.setAttribute('aria-disabled', 'true');
+                    btn.setAttribute('aria-busy', 'true');
+                    const original = btn.dataset.originalText || btn.textContent.trim();
                     btn.dataset.originalText = original;
-                    btn.textContent = btn.dataset.submitText || 'Processing...';
+                    // Create spinner + text content
+                    const submitText = btn.dataset.submitText || 'Processing...';
+                    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span><span>${submitText}</span>`;
                 });
             });
         });

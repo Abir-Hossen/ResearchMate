@@ -1,0 +1,62 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Subscription Plans{% endblock %}
+
+{% block content %}
+<div class="section-card">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div class="section-title mb-0">Subscription Plans</div>
+        <div class="d-flex gap-2">
+            <form method="get" class="d-flex gap-2">
+                <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm" placeholder="Search plans..." style="width: 240px;">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            </form>
+            <a href="{% url 'admin_panel:plan_create' %}" class="btn btn-success btn-sm">Add Plan</a>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Slug</th>
+                    <th>Price</th>
+                    <th>Duration</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plan in plans %}
+                    <tr>
+                        <td>{{ plan.name }}</td>
+                        <td>{{ plan.slug }}</td>
+                        <td>BDT {{ plan.price }}</td>
+                        <td>{{ plan.duration_days }} days</td>
+                        <td>
+                            {% if plan.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'admin_panel:plan_edit' plan.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No plans found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

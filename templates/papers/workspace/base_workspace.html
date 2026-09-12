@@ -40,7 +40,7 @@
         <div class="alert alert-warning" role="alert">
             <div class="fw-semibold">We could not complete AI generation.</div>
             <div class="mt-2">{{ user_facing_error_message }}</div>
-            <form method="post" action="{% url 'start_learning' paper.id %}" class="mt-3 d-inline">
+            <form method="post" action="{% url 'start_learning' paper.id %}" class="mt-3 d-inline" data-submit-text="Retrying AI Generation...">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-outline-primary">Retry AI Generation</button>
             </form>
