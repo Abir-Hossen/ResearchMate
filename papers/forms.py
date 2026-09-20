@@ -1,9 +1,14 @@
 from django import forms
+from pathlib import Path
 
 from .models import Paper
 
 
 class PaperUploadForm(forms.ModelForm):
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
     class Meta:
         model = Paper
         fields = ('title', 'pdf_file')
@@ -16,6 +21,12 @@ class PaperUploadForm(forms.ModelForm):
             'pdf_file': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.pdf,application/pdf'}),
         }
 
+    def clean_title(self):
+        title = self.cleaned_data.get('title')
+        if self.user and Paper.objects.filter(owner=self.user, title__iexact=title).exists():
+            raise forms.ValidationError('You already have a paper with this title.')
+        return title
+
     def clean_pdf_file(self):
         pdf_file = self.cleaned_data.get('pdf_file')
         if not pdf_file:
@@ -26,5 +37,11 @@ class PaperUploadForm(forms.ModelForm):
 
         if not pdf_file.name.lower().endswith('.pdf'):
             raise forms.ValidationError('Only PDF files are allowed.')
+
+        filename = Path(pdf_file.name).name
+        if self.user:
+            existing_filenames = Paper.objects.filter(owner=self.user).values_list('pdf_file', flat=True)
+            if any(Path(existing_name).name.casefold() == filename.casefold() for existing_name in existing_filenames):
+                raise forms.ValidationError('You already have a paper with this file name.')
 
         return pdf_file
