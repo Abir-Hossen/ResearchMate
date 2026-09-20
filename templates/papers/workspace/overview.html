@@ -20,6 +20,10 @@
         <div class="alert alert-success mt-3 mb-0" role="status">
             Paper is prepared for AI learning.
         </div>
+        {% else %}
+        <div class="alert alert-info mt-3 mb-0" role="status">
+            Click <strong>Start Learning</strong> before opening any learning module. This prepares the paper and its extracted content for the Learning Hub.
+        </div>
         {% endif %}
         <div class="mt-4 d-flex gap-2 flex-wrap">
             <a class="btn btn-primary" href="{{ paper.pdf_file.url }}" target="_blank">View PDF</a>

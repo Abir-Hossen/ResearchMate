@@ -85,6 +85,7 @@ _CONCEPT_PATTERNS = (
         r'^(?:the\s+)?conclusions?\s+and\s+(?:future|further)\b',
         r'^(?:the\s+)?final\s+remarks\b',
         r'^(?:the\s+)?closing\s+remarks\b',
+        r'^(?:the\s+)?future\s+outlook\b',
     )),
     (CONCEPT_RELATED_WORK, (
         r'^(?:the\s+)?related\s+works?\b',
@@ -116,6 +117,7 @@ _CONCEPT_PATTERNS = (
         r'^(?:the\s+)?comparative\s+(?:analysis|study)\b',
         r'^(?:the\s+)?performance\s+analysis\b',
         r'^(?:the\s+)?analysis\s+of\s+results?\b',
+        r'^(?:the\s+)?application\b',
     )),
     (CONCEPT_METHODOLOGY, (
         r'^(?:the\s+)?methodolog(?:y|ies)\b',
@@ -224,6 +226,20 @@ def clean_heading_text(raw_title):
         return ''
 
     title = _MARKDOWN_PREFIX_RE.sub('', title)
+    title = re.sub(r'\b([IVXLCDM]+)\s+\.', r'\1.', title, flags=re.IGNORECASE)
+
+    # Some PDF extractors split capitalized words at column boundaries
+    # (for example "I NTRODUCTION" or "A TERIALS AND METHODS").
+    previous = None
+    while previous != title:
+        previous = title
+        title = re.sub(r'\b([A-Z])\s+([A-Z]{2,})\b', r'\1\2', title)
+    title = re.sub(r'\b(APPLICA)\s+(TION)\b', r'\1\2', title, flags=re.IGNORECASE)
+    title = re.sub(r'^ATERIALS\b', 'MATERIALS', title, flags=re.IGNORECASE)
+    title = re.sub(r'^PPLICA\s+TION\b', 'APPLICATION', title, flags=re.IGNORECASE)
+    title = re.sub(r'^UTURE\b', 'FUTURE', title, flags=re.IGNORECASE)
+    title = re.sub(r'^EFERENCES\b', 'REFERENCES', title, flags=re.IGNORECASE)
+
     previous = None
     while previous != title:
         previous = title
