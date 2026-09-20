@@ -563,6 +563,20 @@ class SectionLearningGenerationTests(TestCase):
 
         self.assertEqual([section.title for section in sections], ['Main Content'])
 
+    def test_heading_only_papers_fall_back_to_main_content(self):
+        _, paper = create_paper(
+            'slheadingonly',
+            'Abstract\n\nIntroduction\n\nMethodology\n\nResults\n\nConclusion\n',
+        )
+        response = section_response('Main Content')
+
+        with patch('papers.section_learning_service.AIService.generate_feature', return_value=response) as mock_generate:
+            sections = generate_section_learning(paper)
+
+        self.assertEqual([section.title for section in sections], ['Main Content'])
+        self.assertIn('Main Content', mock_generate.call_args.args[1])
+        self.assertEqual(mock_generate.call_count, 1)
+
     def test_back_matter_sections_are_skipped(self):
         _, paper = create_paper('slbackmatter', STANDARD_PAPER_TEXT)
         response = section_response('Introduction', 'Methodology', 'Results', 'Conclusion', 'References', 'Acknowledgements')
