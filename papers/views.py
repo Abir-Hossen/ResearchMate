@@ -297,9 +297,29 @@ def paper_quiz(request, paper_id):
             request.session.pop(f'quiz_answers_{paper.id}', None)
             return redirect('paper_quiz', paper_id=paper.id)
 
-        current_index = int(request.POST.get('question_index', 0))
+        try:
+            current_index = int(request.POST.get('question_index', 0))
+        except (TypeError, ValueError):
+            messages.error(request, 'Invalid quiz question.')
+            return redirect('paper_quiz', paper_id=paper.id)
+
+        if current_index < 0 or current_index >= len(quiz_questions):
+            messages.error(request, 'Invalid quiz question.')
+            return redirect('paper_quiz', paper_id=paper.id)
+
         selected_answer = request.POST.get('selected_answer', '')
         if selected_answer:
+            current_question = quiz_questions[current_index]
+            valid_answers = {
+                current_question.option_a,
+                current_question.option_b,
+                current_question.option_c,
+                current_question.option_d,
+            }
+            if selected_answer not in valid_answers:
+                messages.error(request, 'Please select a valid answer.')
+                return redirect('paper_quiz', paper_id=paper.id)
+
             answers = dict(request.session.get(f'quiz_answers_{paper.id}', {}))
             answers[str(current_index)] = selected_answer
             request.session[f'quiz_answers_{paper.id}'] = answers

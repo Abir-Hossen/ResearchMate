@@ -8,6 +8,7 @@ from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from papers.dashboard_service import get_dashboard_data
+from subscriptions.models import SubscriptionPlan
 from subscriptions.services import get_current_subscription_status
 
 from .forms import LoginForm, PasswordChangeForm, RegistrationForm
@@ -16,7 +17,8 @@ from .forms import LoginForm, PasswordChangeForm, RegistrationForm
 def home_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
-    return render(request, 'landing.html')
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('duration_days')
+    return render(request, 'landing.html', {'plans': plans})
 
 
 def register_view(request):

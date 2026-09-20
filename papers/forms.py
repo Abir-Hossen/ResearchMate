@@ -1,5 +1,6 @@
 from django import forms
 from pathlib import Path
+import re
 
 from .models import Paper
 
@@ -39,9 +40,18 @@ class PaperUploadForm(forms.ModelForm):
             raise forms.ValidationError('Only PDF files are allowed.')
 
         filename = Path(pdf_file.name).name
+        filename_stem = Path(filename).stem.casefold()
+        filename_suffix = Path(filename).suffix.casefold()
         if self.user:
             existing_filenames = Paper.objects.filter(owner=self.user).values_list('pdf_file', flat=True)
-            if any(Path(existing_name).name.casefold() == filename.casefold() for existing_name in existing_filenames):
+            if any(
+                Path(existing_name).name.casefold() == filename.casefold()
+                or (
+                    Path(existing_name).suffix.casefold() == filename_suffix
+                    and re.fullmatch(rf'{re.escape(filename_stem)}_[a-z0-9]+', Path(existing_name).stem.casefold())
+                )
+                for existing_name in existing_filenames
+            ):
                 raise forms.ValidationError('You already have a paper with this file name.')
 
         return pdf_file

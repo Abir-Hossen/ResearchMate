@@ -279,6 +279,42 @@ class AuthenticationFlowTests(TestCase):
 
 
 class LandingFlowTests(TestCase):
+    def test_landing_page_shows_active_admin_created_plan(self):
+        from decimal import Decimal
+
+        from subscriptions.models import SubscriptionPlan
+
+        SubscriptionPlan.objects.create(
+            name='Research Annual',
+            slug='research-annual',
+            price=Decimal('999.00'),
+            duration_days=365,
+            is_active=True,
+        )
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Research Annual')
+        self.assertContains(response, '৳999.00')
+        self.assertContains(response, '365-day premium access.')
+
+    def test_landing_page_hides_inactive_plan(self):
+        from subscriptions.models import SubscriptionPlan
+
+        SubscriptionPlan.objects.create(
+            name='Hidden Plan',
+            slug='hidden-plan',
+            price='49.00',
+            duration_days=14,
+            is_active=False,
+        )
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Hidden Plan')
+
     def test_landing_page_navbar_is_present_and_visible(self):
         response = self.client.get(reverse('home'))
         self.assertEqual(response.status_code, 200)
@@ -295,13 +331,22 @@ class LandingFlowTests(TestCase):
         self.assertContains(response, 'next=/subscriptions/pricing/')
 
     def test_authenticated_landing_premium_button_redirects_to_pricing(self):
+        from decimal import Decimal
         from django.template.loader import render_to_string
         from django.test import RequestFactory
+        from subscriptions.models import SubscriptionPlan
 
         user = User.objects.create_user(username='landingauth', password='Secret123')
+        plan = SubscriptionPlan.objects.create(
+            name='Landing Plan',
+            slug='landing-plan',
+            price=Decimal('9.99'),
+            duration_days=7,
+            is_active=True,
+        )
         request = RequestFactory().get('/')
         request.user = user
-        html = render_to_string('landing.html', {}, request=request)
+        html = render_to_string('landing.html', {'plans': [plan]}, request=request)
         self.assertIn('href="/subscriptions/pricing/"', html)
         self.assertNotIn('accounts/login/?next', html)
 

@@ -1,7 +1,11 @@
+from decimal import Decimal, InvalidOperation
+import re
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_slug
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -10,6 +14,26 @@ from .forms import AdminLoginForm, AdminPasswordResetForm, AdminUserEditForm
 
 
 User = get_user_model()
+
+
+def _parse_plan_values(price, duration_days, slug):
+    try:
+        price = Decimal(price)
+        duration_days = int(duration_days)
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValidationError('Invalid price or duration format.')
+
+    if not price.is_finite() or price <= 0 or duration_days <= 0:
+        raise ValidationError('Price and duration must be positive values.')
+
+    try:
+        validate_slug(slug)
+    except ValidationError:
+        raise ValidationError('Slug may contain only lowercase letters, numbers, and hyphens.')
+    if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', slug):
+        raise ValidationError('Slug must use lowercase letters, numbers, and hyphens.')
+
+    return price, duration_days
 
 
 def admin_login_view(request):
@@ -533,10 +557,9 @@ def plan_create(request):
             return redirect('admin_panel:plan_create')
 
         try:
-            price = float(price)
-            duration_days = int(duration_days)
-        except (ValueError, TypeError):
-            messages.error(request, 'Invalid price or duration format.')
+            price, duration_days = _parse_plan_values(price, duration_days, slug)
+        except ValidationError as exc:
+            messages.error(request, str(exc))
             return redirect('admin_panel:plan_create')
 
         if SubscriptionPlan.objects.filter(slug=slug).exists():
@@ -578,10 +601,9 @@ def plan_edit(request, plan_id):
             return redirect('admin_panel:plan_edit', plan_id=plan.id)
 
         try:
-            price = float(price)
-            duration_days = int(duration_days)
-        except (ValueError, TypeError):
-            messages.error(request, 'Invalid price or duration format.')
+            price, duration_days = _parse_plan_values(price, duration_days, slug)
+        except ValidationError as exc:
+            messages.error(request, str(exc))
             return redirect('admin_panel:plan_edit', plan_id=plan.id)
 
         if SubscriptionPlan.objects.filter(slug=slug).exclude(pk=plan.pk).exists():
