@@ -8,8 +8,13 @@ from .ai_service import AIService
 from .models import PaperContent, PaperSection
 from .prompts.section_learning import build_section_learning_prompt
 from .response_validator import validate_json_response
+from .section_normalizer import detect_paper_structure, display_section_title
 
 logger = logging.getLogger(__name__)
+
+SECTION_LEARNING_MAX_SECTIONS = 8
+SECTION_LEARNING_COMPLETION_TOKENS = 3200
+SECTION_LEARNING_RETRY_COMPLETION_TOKENS = 3600
 
 
 def _repair_section_json(text):
@@ -541,14 +546,43 @@ def _build_section_explanation_context(extracted_text):
     return context, section_texts
 
 
-def generate_section_learning(paper, force_refresh=False):
-    """
-    Generate section learning explanations using per-section extracted text.
+def _select_learning_blocks(extracted_text):
+    """Select real, useful headings before the model sees the paper."""
+    structure = detect_paper_structure(extracted_text)
+    blocks = [block for block in structure['blocks'] if block.get('text')]
+    if not blocks:
+        text = _prepare_section_text(extracted_text, max_chars=900)
+        return [{'title': 'Main Content', 'text': text, 'concept': ''}] if text else []
 
-    For each canonical section, extracts the actual section text from the paper
-    and sends it to the AI in a single request so explanations are grounded in
-    the corresponding section content.
-    """
+    selected = []
+    concepts_seen = set()
+    for block in blocks:
+        concept = block.get('concept')
+        if concept and concept not in concepts_seen:
+            selected.append(block)
+            concepts_seen.add(concept)
+
+    for block in blocks:
+        if block not in selected and len(selected) < SECTION_LEARNING_MAX_SECTIONS:
+            selected.append(block)
+
+    selected = selected[:SECTION_LEARNING_MAX_SECTIONS]
+    return sorted(selected, key=blocks.index)
+
+
+def _build_detected_section_context(extracted_text):
+    blocks = _select_learning_blocks(extracted_text)
+    parts = []
+    for block in blocks:
+        title = display_section_title(block.get('title') or 'Section')
+        excerpt = _prepare_section_text(block.get('text') or '', max_chars=700)
+        if excerpt:
+            parts.append(f'## {title}\n{excerpt}')
+    return '\n\n'.join(parts), blocks
+
+
+def generate_section_learning(paper, force_refresh=False):
+    """Generate short explanations for headings detected in the paper."""
     try:
         content = paper.content
     except ObjectDoesNotExist as exc:
@@ -565,15 +599,21 @@ def generate_section_learning(paper, force_refresh=False):
     last_error = None
     for attempt in range(2):
         try:
-            section_context, section_texts = _build_section_explanation_context(content.extracted_text)
+            section_context, detected_blocks = _build_detected_section_context(content.extracted_text)
             prompt = build_section_learning_prompt(section_context)
             explanation_response = ai_service.generate_feature(
                 'section_learning',
                 section_context,
                 prompt_type='section_detection',
+                max_completion_tokens=(
+                    SECTION_LEARNING_COMPLETION_TOKENS
+                    if attempt == 0
+                    else SECTION_LEARNING_RETRY_COMPLETION_TOKENS
+                ),
             )
         except Exception as exc:
             last_error = exc
+            logger.exception('Section Learning provider request failed on attempt %s', attempt + 1)
             error_text = str(exc).lower()
             if 'rate limit' in error_text or '429' in error_text or 'daily token limit' in error_text or 'tokens per day' in error_text:
                 raise SectionLearningError('AI section generation is temporarily unavailable because the configured Groq account has reached its daily token limit (rate limit). Please try again later or use a different API key.') from exc
@@ -581,6 +621,7 @@ def generate_section_learning(paper, force_refresh=False):
 
         if not explanation_response or not str(explanation_response).strip():
             last_error = SectionLearningError('Empty section learning response')
+            logger.error('Section Learning provider returned an empty response')
             continue
 
         valid_response, response_payload, response_error = validate_json_response(explanation_response)
@@ -615,22 +656,13 @@ def generate_section_learning(paper, force_refresh=False):
                         section_map[normalized_title] = explanation
 
                 cleaned_sections = []
-                for fixed_title, heading_pattern in FIXED_SECTIONS:
-                    explanation = ''
-                    for title_key, expl in section_map.items():
-                        if _section_matches_heading(title_key, heading_pattern):
-                            explanation = expl
-                            break
-
+                for block in detected_blocks:
+                    title = display_section_title(block.get('title') or 'Section')
+                    explanation = section_map.get(_normalize_section_title(title))
                     if not explanation:
-                        excerpt = section_texts.get(fixed_title, '')
-                        if excerpt:
-                            explanation = excerpt
-                        else:
-                            explanation = 'This section is not present in the paper.'
-
+                        continue
                     cleaned_sections.append({
-                        'title': fixed_title,
+                        'title': title,
                         'order': len(cleaned_sections) + 1,
                         'summary': explanation,
                         'purpose': '',
@@ -641,8 +673,10 @@ def generate_section_learning(paper, force_refresh=False):
                         'original_text': '',
                     })
 
-                return _persist_section_learning(paper, cleaned_sections)
+                if cleaned_sections:
+                    return _persist_section_learning(paper, cleaned_sections)
 
-        last_error = SectionLearningError(f'AI returned an invalid response: {response_error}')
+        last_error = SectionLearningError(f'AI returned no usable detected sections: {response_error}')
+        logger.error('Section Learning response was unusable: %s', response_error)
 
-    raise SectionLearningError('AI section generation failed. Please try again later.') from last_error
+    raise SectionLearningError(str(last_error) or 'AI section generation failed. Please try again later.') from last_error

@@ -1,7 +1,7 @@
 ﻿import re
 
 
-def _compact_section_text(section_text, max_chars=4000):
+def _compact_section_text(section_text, max_chars=7000):
     """Compact paper text to stay within token limits while preserving content."""
     if not section_text:
         return ''
@@ -17,53 +17,37 @@ def _compact_section_text(section_text, max_chars=4000):
 
 
 def build_section_learning_prompt(extracted_text, paper_context=None):
-    """Build a prompt for fixed-section paper explanation generation."""
+    """Build a compact prompt for headings already detected in the paper."""
     if not extracted_text:
         return ''
 
     compact_text = _compact_section_text(extracted_text)
-    return f"""You are an expert academic reading tutor. Below is a paper with labeled sections. For EACH labeled section below, write exactly ONE concise explanation of 60-90 words grounded ONLY in that section's text.
+    headings = re.findall(r'^##\s+(.+)$', compact_text, flags=re.MULTILINE)
+    if not headings:
+        headings = ['Main Content']
+    heading_json = ',\n'.join(
+        f'    {{"title": "{heading}", "explanation": "45-60 word paper-specific overview."}}'
+        for heading in headings
+    )
+    heading_list = ', '.join(headings)
+    return f"""You are an expert academic reading tutor. The paper headings below were detected from the extracted paper text before this request. For EACH detected heading, write exactly ONE short overview of 45-60 words grounded ONLY in that heading's text. Never exceed 70 words for any section.
 Do NOT use information from another section. Do NOT invent facts, methods, datasets, or findings not present in the supplied text.
-
-If a section shows "[No text available for this section]", write "This section is not present in the paper." for that section only.
+Never invent a section that is not supported by the text. Never use a sentence, a sentence fragment, a subsection heading, or a line of body text as a title.
 
 OUTPUT FORMAT - Return ONLY valid JSON:
 {{
   "sections": [
-    {{
-      "title": "Abstract",
-      "explanation": "60-90 word paper-specific explanation."
-    }},
-    {{
-      "title": "Introduction",
-      "explanation": "60-90 word paper-specific explanation."
-    }},
-    {{
-      "title": "Related Work",
-      "explanation": "60-90 word paper-specific explanation."
-    }},
-    {{
-      "title": "Methodology",
-      "explanation": "60-90 word paper-specific explanation."
-    }},
-    {{
-      "title": "Results and Discussion",
-      "explanation": "60-90 word paper-specific explanation."
-    }},
-    {{
-      "title": "Conclusion",
-      "explanation": "60-90 word paper-specific explanation."
-    }}
+{heading_json}
   ]
 }}
 
 RULES:
-- Return exactly 6 sections. The section titles must be exactly: Abstract, Introduction, Related Work, Methodology, Results and Discussion, Conclusion.
+- Return exactly {len(headings)} sections. The section titles must be exactly: {heading_list}.
 - Do NOT include markdown, code fences, or any text outside the JSON.
 - Do NOT invent facts not supported by the section text.
-- Keep each explanation under 90 words to avoid truncation.
+- Keep each explanation short, preferably 45-60 words and never over 70 words, to avoid truncation.
 
-Labeled paper sections:
+Detected paper sections:
 {compact_text}"""
 
 
