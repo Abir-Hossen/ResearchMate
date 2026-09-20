@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 @login_required(login_url='login')
 def upload_paper_view(request):
     if request.method == 'POST':
-        form = PaperUploadForm(request.POST, request.FILES)
+        form = PaperUploadForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             paper = form.save(commit=False)
             paper.owner = request.user
@@ -60,7 +60,7 @@ def upload_paper_view(request):
             messages.success(request, 'Paper uploaded successfully.')
             return redirect('dashboard')
     else:
-        form = PaperUploadForm()
+        form = PaperUploadForm(user=request.user)
 
     return render(request, 'papers/upload.html', {'form': form})
 

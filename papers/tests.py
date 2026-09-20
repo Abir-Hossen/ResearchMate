@@ -207,6 +207,48 @@ class PaperUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Only PDF files are allowed.')
 
+    def test_duplicate_title_is_rejected_for_same_user(self):
+        user = User.objects.create_user(username='duplicate-title-user', password='Secret123')
+        Paper.objects.create(
+            owner=user,
+            title='Existing Paper',
+            pdf_file=SimpleUploadedFile('existing.pdf', b'%PDF-1.4\n', content_type='application/pdf'),
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse('upload_paper'),
+            {
+                'title': 'existing paper',
+                'pdf_file': SimpleUploadedFile('different.pdf', b'%PDF-1.4\n', content_type='application/pdf'),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'You already have a paper with this title.')
+        self.assertEqual(Paper.objects.filter(owner=user).count(), 1)
+
+    def test_duplicate_file_name_is_rejected_for_same_user(self):
+        user = User.objects.create_user(username='duplicate-file-user', password='Secret123')
+        Paper.objects.create(
+            owner=user,
+            title='Existing Paper',
+            pdf_file=SimpleUploadedFile('same-name.pdf', b'%PDF-1.4\n', content_type='application/pdf'),
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse('upload_paper'),
+            {
+                'title': 'Different Paper',
+                'pdf_file': SimpleUploadedFile('SAME-NAME.pdf', b'%PDF-1.4\n', content_type='application/pdf'),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'You already have a paper with this file name.')
+        self.assertEqual(Paper.objects.filter(owner=user).count(), 1)
+
     def test_my_papers_page_only_shows_current_user_papers(self):
         owner = User.objects.create_user(username='owner', password='Secret123')
         other = User.objects.create_user(username='other', password='Secret123')
