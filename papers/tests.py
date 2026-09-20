@@ -1635,6 +1635,54 @@ class LearningNavigationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Done')
 
+    def test_quiz_rejects_invalid_question_index(self):
+        user = User.objects.create_user(username='quizinvalidindex', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Quiz Invalid Index Paper', pdf_file='papers/quizinvalidindex.pdf')
+        QuizQuestion.objects.create(
+            paper=paper,
+            question='What is the answer?',
+            option_a='A',
+            option_b='B',
+            option_c='C',
+            option_d='D',
+            correct_answer='A',
+            display_order=0,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse('paper_quiz', args=[paper.pk]),
+            {'action': 'next', 'question_index': 'not-a-number', 'selected_answer': 'A'},
+        )
+
+        self.assertRedirects(response, reverse('paper_quiz', args=[paper.pk]))
+        self.assertNotIn(f'quiz_answers_{paper.pk}', self.client.session)
+
+    def test_quiz_rejects_answer_not_in_current_question_options(self):
+        user = User.objects.create_user(username='quizinvalidanswer', password='Secret123')
+        _create_premium_subscription(user)
+        paper = Paper.objects.create(owner=user, title='Quiz Invalid Answer Paper', pdf_file='papers/quizinvalidanswer.pdf')
+        QuizQuestion.objects.create(
+            paper=paper,
+            question='What is the answer?',
+            option_a='A',
+            option_b='B',
+            option_c='C',
+            option_d='D',
+            correct_answer='A',
+            display_order=0,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse('paper_quiz', args=[paper.pk]),
+            {'action': 'next', 'question_index': '0', 'selected_answer': 'not-an-option'},
+        )
+
+        self.assertRedirects(response, reverse('paper_quiz', args=[paper.pk]))
+        self.assertNotIn(f'quiz_answers_{paper.pk}', self.client.session)
+
     def test_section_next_navigates_to_next_module(self):
         user = User.objects.create_user(username='navlast', password='Secret123')
         _create_premium_subscription(user)

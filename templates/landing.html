@@ -281,43 +281,27 @@
                     <a href="{% url 'register' %}" class="btn btn-outline-primary w-100">Get Started Free</a>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="pricing-card text-center">
-                    <h5 class="text-uppercase text-muted fw-semibold mb-2">Premium Weekly</h5>
-                    <div class="display-6 fw-bold mb-1">৳99</div>
-                    <p class="text-muted small mb-3">7-day premium access.</p>
-                    <ul class="list-unstyled text-start small mb-4">
-                        <li class="mb-2">Full access to all AI learning tools</li>
-                        <li class="mb-2">Technical explanations</li>
-                        <li class="mb-2">Section learning, glossary, and flashcards</li>
-                        <li class="mb-2">Quizzes, viva prep, and revision notes</li>
-                    </ul>
-                    {% if request.user.is_authenticated %}
-                        <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary w-100">Upgrade</a>
-                    {% else %}
-                        <a href="{% url 'login' %}?next={% url 'subscriptions:pricing' %}" class="btn btn-primary w-100">Upgrade</a>
-                    {% endif %}
+            {% for plan in plans %}
+                <div class="col-md-4">
+                    <div class="pricing-card{% if forloop.last %} popular{% endif %} text-center">
+                        {% if forloop.last %}<div class="popular-badge">Best Value</div>{% endif %}
+                        <h5 class="text-uppercase text-muted fw-semibold mb-2{% if forloop.last %} mt-2{% endif %}">{{ plan.name }}</h5>
+                        <div class="display-6 fw-bold mb-1">৳{{ plan.price|floatformat:2 }}</div>
+                        <p class="text-muted small mb-3">{{ plan.duration_days }}-day premium access.</p>
+                        <ul class="list-unstyled text-start small mb-4">
+                            <li class="mb-2">Full access to all AI learning tools</li>
+                            <li class="mb-2">Technical explanations</li>
+                            <li class="mb-2">Section learning, glossary, and flashcards</li>
+                            <li class="mb-2">Quizzes, viva prep, and revision notes</li>
+                        </ul>
+                        {% if request.user.is_authenticated %}
+                            <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary w-100">Upgrade</a>
+                        {% else %}
+                            <a href="{% url 'login' %}?next={% url 'subscriptions:pricing' %}" class="btn btn-primary w-100">Upgrade</a>
+                        {% endif %}
+                    </div>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="pricing-card popular text-center">
-                    <div class="popular-badge">Best Value</div>
-                    <h5 class="text-uppercase text-muted fw-semibold mb-2 mt-2">Premium Monthly</h5>
-                    <div class="display-6 fw-bold mb-1">৳299</div>
-                    <p class="text-muted small mb-3">30-day premium access.</p>
-                    <ul class="list-unstyled text-start small mb-4">
-                        <li class="mb-2">Full access to all AI learning tools</li>
-                        <li class="mb-2">Technical explanations</li>
-                        <li class="mb-2">Section learning, glossary, and flashcards</li>
-                        <li class="mb-2">Quizzes, viva prep, and revision notes</li>
-                    </ul>
-                    {% if request.user.is_authenticated %}
-                        <a href="{% url 'subscriptions:pricing' %}" class="btn btn-primary w-100">Upgrade</a>
-                    {% else %}
-                        <a href="{% url 'login' %}?next={% url 'subscriptions:pricing' %}" class="btn btn-primary w-100">Upgrade</a>
-                    {% endif %}
-                </div>
-            </div>
+            {% endfor %}
         </div>
     </div>
 </section>
