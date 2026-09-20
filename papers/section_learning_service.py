@@ -579,6 +579,14 @@ def _select_learning_blocks(extracted_text):
     return sorted(selected, key=blocks.index)
 
 
+def _build_detection_fallback(extracted_text):
+    text = _prepare_section_text(extracted_text, max_chars=900)
+    if not text:
+        return '', []
+    fallback_block = {'title': 'Main Content', 'text': text, 'concept': ''}
+    return f'## Main Content\n{text}', [fallback_block]
+
+
 def _build_detected_section_context(extracted_text):
     blocks = _select_learning_blocks(extracted_text)
     parts = []
@@ -587,6 +595,10 @@ def _build_detected_section_context(extracted_text):
         excerpt = _prepare_section_text(block.get('text') or '', max_chars=500)
         if excerpt:
             parts.append(f'## {title}\n{excerpt}')
+
+    if not parts:
+        return _build_detection_fallback(extracted_text)
+
     return '\n\n'.join(parts), blocks
 
 
@@ -609,6 +621,8 @@ def generate_section_learning(paper, force_refresh=False):
     for attempt in range(2):
         try:
             section_context, detected_blocks = _build_detected_section_context(content.extracted_text)
+            if not section_context or not section_context.strip():
+                section_context, detected_blocks = _build_detection_fallback(content.extracted_text)
             prompt = build_section_learning_prompt(section_context)
             explanation_response = ai_service.generate_feature(
                 'section_learning',
