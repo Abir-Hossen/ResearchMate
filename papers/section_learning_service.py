@@ -8,7 +8,7 @@ from .ai_service import AIService
 from .models import PaperContent, PaperSection
 from .prompts.section_learning import build_section_learning_prompt
 from .response_validator import validate_json_response
-from .section_normalizer import detect_paper_structure, display_section_title
+from .section_normalizer import detect_paper_structure, display_section_title, normalize_section_title
 
 logger = logging.getLogger(__name__)
 
@@ -554,6 +554,15 @@ def _select_learning_blocks(extracted_text):
         text = _prepare_section_text(extracted_text, max_chars=900)
         return [{'title': 'Main Content', 'text': text, 'concept': ''}] if text else []
 
+    unique_blocks = []
+    seen_titles = set()
+    for block in blocks:
+        normalized_title = normalize_section_title(block.get('title') or '')
+        if normalized_title and normalized_title not in seen_titles:
+            unique_blocks.append(block)
+            seen_titles.add(normalized_title)
+
+    blocks = unique_blocks
     selected = []
     concepts_seen = set()
     for block in blocks:
@@ -575,7 +584,7 @@ def _build_detected_section_context(extracted_text):
     parts = []
     for block in blocks:
         title = display_section_title(block.get('title') or 'Section')
-        excerpt = _prepare_section_text(block.get('text') or '', max_chars=700)
+        excerpt = _prepare_section_text(block.get('text') or '', max_chars=500)
         if excerpt:
             parts.append(f'## {title}\n{excerpt}')
     return '\n\n'.join(parts), blocks
