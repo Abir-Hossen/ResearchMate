@@ -1,6 +1,7 @@
 import logging
 
 import requests
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
@@ -45,6 +46,11 @@ def _get_safe_return_url(request):
     if url_has_allowed_host_and_scheme(return_url, allowed_hosts=allowed_hosts):
         return return_url
     return None
+
+
+def _restore_payment_session(request, transaction):
+    if not request.user.is_authenticated:
+        login(request, transaction.user)
 
 
 @login_required(login_url='login')
@@ -176,6 +182,7 @@ def payment_success_view(request):
             'activated': False,
         })
 
+    _restore_payment_session(request, transaction)
     subscription = get_active_subscription(transaction.user)
     return_url = _get_safe_return_url(request)
     return render(request, 'subscriptions/payment_return.html', {
