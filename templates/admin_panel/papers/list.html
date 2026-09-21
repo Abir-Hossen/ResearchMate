@@ -9,10 +9,10 @@
         <form method="get" class="d-flex gap-2">
             <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm" placeholder="Search title or owner..." style="width: 280px;">
             <select name="status" class="form-select form-select-sm">
-                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
-                <option value="Uploaded" {% if status_filter == 'Uploaded' %}selected{% endif %}>Uploaded</option>
-                <option value="Processing" {% if status_filter == 'Processing' %}selected{% endif %}>Processing</option>
-                <option value="Completed" {% if status_filter == 'Completed' %}selected{% endif %}>Completed</option>
+                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Learning Statuses</option>
+                <option value="not_started" {% if status_filter == 'not_started' %}selected{% endif %}>Not Started</option>
+                <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>In Progress</option>
+                <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
             </select>
             <button type="submit" class="btn btn-primary btn-sm">Filter</button>
         </form>
@@ -25,7 +25,7 @@
                     <th>ID</th>
                     <th>Title</th>
                     <th>Owner</th>
-                    <th>Status</th>
+                    <th>Learning Status</th>
                     <th>AI</th>
                     <th>Quiz Q</th>
                     <th>Viva Q</th>
@@ -41,12 +41,12 @@
                         <td>{{ paper.title }}</td>
                         <td>{{ paper.owner.username }}</td>
                         <td>
-                            {% if paper.processing_status == 'Completed' %}
+                            {% if paper.learning_status == 'Completed' %}
                                 <span class="badge bg-success">Completed</span>
-                            {% elif paper.processing_status == 'Processing' %}
-                                <span class="badge bg-warning">Processing</span>
+                            {% elif paper.learning_status == 'In Progress' %}
+                                <span class="badge bg-warning">In Progress</span>
                             {% else %}
-                                <span class="badge bg-secondary">Uploaded</span>
+                                <span class="badge bg-secondary">Not Started</span>
                             {% endif %}
                         </td>
                         <td>

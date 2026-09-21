@@ -19,14 +19,26 @@
                 <tr><th>ID</th><td>{{ paper.id }}</td></tr>
                 <tr><th>Title</th><td>{{ paper.title }}</td></tr>
                 <tr>
-                    <th>Status</th>
+                    <th>PDF Status</th>
                     <td>
                         {% if paper.processing_status == 'Completed' %}
-                            <span class="badge bg-success">Completed</span>
+                            <span class="badge bg-success">Ready</span>
                         {% elif paper.processing_status == 'Processing' %}
                             <span class="badge bg-warning">Processing</span>
                         {% else %}
                             <span class="badge bg-secondary">Uploaded</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Learning Status</th>
+                    <td>
+                        {% if learning_status == 'Completed' %}
+                            <span class="badge bg-success">Completed</span>
+                        {% elif learning_status == 'In Progress' %}
+                            <span class="badge bg-warning">In Progress</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Not Started</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -120,24 +132,20 @@
 
         <div class="section-card">
             <div class="section-title">LearningProgress</div>
-            {% if paper.learning_progress %}
-                <table class="table table-sm mb-2">
-                    <tr><th>Overall</th><td>{{ completion_percentage }}%</td></tr>
-                    <tr><th>Last Accessed</th><td>{{ paper.learning_progress.last_accessed|date:"M d, Y H:i"|default:"-" }}</td></tr>
-                </table>
-                <div class="d-flex flex-wrap gap-1">
-                    {% if paper.learning_progress.overview_completed %}<span class="badge bg-success">Overview</span>{% endif %}
-                    {% if paper.learning_progress.beginner_completed %}<span class="badge bg-success">Beginner</span>{% endif %}
-                    {% if paper.learning_progress.technical_completed %}<span class="badge bg-success">Technical</span>{% endif %}
-                    {% if paper.learning_progress.glossary_completed %}<span class="badge bg-success">Glossary</span>{% endif %}
-                    {% if paper.learning_progress.flashcards_completed %}<span class="badge bg-success">Flashcards</span>{% endif %}
-                    {% if paper.learning_progress.quiz_completed %}<span class="badge bg-success">Quiz</span>{% endif %}
-                    {% if paper.learning_progress.viva_completed %}<span class="badge bg-success">Viva</span>{% endif %}
-                    {% if paper.learning_progress.notes_completed %}<span class="badge bg-success">Notes</span>{% endif %}
-                </div>
-            {% else %}
-                <p class="text-muted mb-0">No LearningProgress available.</p>
-            {% endif %}
+            <table class="table table-sm mb-2">
+                <tr><th>Generated Modules</th><td>{{ completion_percentage }}%</td></tr>
+                <tr><th>Last Accessed</th><td>{{ paper.learning_progress.last_accessed|date:"M d, Y H:i"|default:"-" }}</td></tr>
+            </table>
+            <div class="d-flex flex-wrap gap-1">
+                {% if module_checks.beginner %}<span class="badge bg-success">Beginner</span>{% endif %}
+                {% if module_checks.technical %}<span class="badge bg-success">Technical</span>{% endif %}
+                {% if module_checks.section_learning %}<span class="badge bg-success">Sections</span>{% endif %}
+                {% if module_checks.glossary %}<span class="badge bg-success">Glossary</span>{% endif %}
+                {% if module_checks.flashcards %}<span class="badge bg-success">Flashcards</span>{% endif %}
+                {% if module_checks.quiz %}<span class="badge bg-success">Quiz</span>{% endif %}
+                {% if module_checks.viva %}<span class="badge bg-success">Viva</span>{% endif %}
+                {% if module_checks.notes %}<span class="badge bg-success">Notes</span>{% endif %}
+            </div>
         </div>
     </div>
 
