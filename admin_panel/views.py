@@ -245,6 +245,7 @@ def user_reset_password(request, user_id):
 @staff_required
 def paper_list(request):
     from papers.models import Paper
+    from papers.dashboard_service import get_paper_status
 
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', 'all')
@@ -262,11 +263,21 @@ def paper_list(request):
             Q(owner__email__icontains=query)
         )
 
-    valid_statuses = ['Uploaded', 'Processing', 'Completed']
-    if status_filter in valid_statuses:
-        papers = papers.filter(processing_status=status_filter)
+    valid_statuses = ['not_started', 'in_progress', 'completed']
+    paper_items = []
+    for paper in papers:
+        paper.learning_status = get_paper_status(paper)
+        if status_filter in valid_statuses:
+            expected_status = {
+                'not_started': 'Not Started',
+                'in_progress': 'In Progress',
+                'completed': 'Completed',
+            }[status_filter]
+            if paper.learning_status != expected_status:
+                continue
+        paper_items.append(paper)
 
-    paginator = Paginator(papers, 20)
+    paginator = Paginator(paper_items, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -280,7 +291,11 @@ def paper_list(request):
 @staff_required
 def paper_detail(request, paper_id):
     from papers.models import Paper
-    from papers.dashboard_service import get_completion_percentage
+    from papers.dashboard_service import (
+        get_completion_percentage,
+        get_module_completion_checks,
+        get_paper_status,
+    )
 
     paper = get_object_or_404(
         Paper.objects.select_related('owner', 'content', 'ai_analysis', 'learning_progress'),
@@ -295,6 +310,8 @@ def paper_detail(request, paper_id):
     paper_sections = paper.section_learning_sections.all().order_by('section_order', 'id')[:100]
 
     completion_percentage = get_completion_percentage(paper)
+    module_checks = get_module_completion_checks(paper)
+    learning_status = get_paper_status(paper)
 
     return render(request, 'admin_panel/papers/detail.html', {
         'paper': paper,
@@ -311,6 +328,8 @@ def paper_detail(request, paper_id):
         'section_count': paper.section_learning_sections.count(),
         'quiz_attempt_count': paper.quiz_attempts.count(),
         'completion_percentage': completion_percentage,
+        'module_checks': module_checks,
+        'learning_status': learning_status,
     })
 
 
