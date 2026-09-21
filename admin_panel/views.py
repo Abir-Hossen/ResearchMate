@@ -163,11 +163,15 @@ def user_list(request):
 
 @staff_required
 def user_detail(request, user_id):
+    from papers.dashboard_service import get_paper_status
+
     user_obj = get_object_or_404(User, pk=user_id)
 
     papers = user_obj.papers.select_related('content', 'ai_analysis', 'learning_progress').prefetch_related(
         'glossary_terms', 'flashcards', 'quiz_questions', 'viva_questions', 'section_learning_sections', 'quiz_attempts'
     ).order_by('-uploaded_at')
+    for paper in papers:
+        paper.learning_status = get_paper_status(paper)
 
     subscriptions = user_obj.subscriptions.select_related('plan').order_by('-created_at')
     payments = user_obj.payment_transactions.select_related('plan').order_by('-created_at')
@@ -241,11 +245,37 @@ def user_reset_password(request, user_id):
         'form': form,
     })
 
+# @staff_required
+# def completed_papers_list(request):
+#     from papers.models import Paper
+
+#     query = request.GET.get('q', '').strip()
+
+#     completed_papers = Paper.objects.filter(
+#         processing_status='Completed'
+#     ).select_related('owner').order_by('-uploaded_at')
+
+#     if query:
+#         completed_papers = completed_papers.filter(
+#             title__icontains=query
+#         )
+
+#     paginator = Paginator(completed_papers, 20)
+#     page_number = request.GET.get('page')
+#     page_obj = paginator.get_page(page_number)
+
+#     return render(request, 'admin_panel/papers/completed_list.html', {
+#         'page_obj': page_obj,
+#         'query': query,
+#     })
 
 @staff_required
 def paper_list(request):
     from papers.models import Paper
-    from papers.dashboard_service import get_paper_status
+    from papers.dashboard_service import (
+            get_missing_modules,
+            get_paper_status,
+        )
 
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', 'all')
@@ -276,6 +306,9 @@ def paper_list(request):
             if paper.learning_status != expected_status:
                 continue
         paper_items.append(paper)
+
+    for paper in papers:
+        paper.missing_modules_count = len(get_missing_modules(paper))
 
     paginator = Paginator(paper_items, 20)
     page_number = request.GET.get('page')

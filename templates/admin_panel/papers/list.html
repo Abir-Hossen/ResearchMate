@@ -31,6 +31,7 @@
                     <th>Viva Q</th>
                     <th>Sections</th>
                     <th>Uploaded</th>
+                    <th>Processing Status</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -60,13 +61,14 @@
                         <td>{{ paper.viva_question_count }}</td>
                         <td>{{ paper.section_count }}</td>
                         <td>{{ paper.uploaded_at|date:"M d, Y" }}</td>
+                        <td>{{ paper.missing_modules_count}}</td>
                         <td>
                             <a href="{% url 'admin_panel:paper_detail' paper.id %}" class="btn btn-sm btn-outline-primary">View</a>
                         </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="10" class="text-center text-muted py-4">No papers found.</td>
+                        <td colspan="11" class="text-center text-muted py-4">No papers found.</td>
                     </tr>
                 {% endfor %}
             </tbody>

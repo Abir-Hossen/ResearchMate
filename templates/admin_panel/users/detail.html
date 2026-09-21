@@ -79,7 +79,7 @@
                         <thead>
                             <tr>
                                 <th>Title</th>
-                                <th>Status</th>
+                                <th>Learning Status</th>
                                 <th>Uploaded</th>
                                 <th>AI</th>
                                 <th>Quiz</th>
@@ -90,12 +90,12 @@
                                 <tr>
                                     <td>{{ paper.title }}</td>
                                     <td>
-                                        {% if paper.processing_status == 'Completed' %}
+                                        {% if paper.learning_status == 'Completed' %}
                                             <span class="badge bg-success">Completed</span>
-                                        {% elif paper.processing_status == 'Processing' %}
-                                            <span class="badge bg-warning">Processing</span>
+                                        {% elif paper.learning_status == 'In Progress' %}
+                                            <span class="badge bg-warning">In Progress</span>
                                         {% else %}
-                                            <span class="badge bg-secondary">Uploaded</span>
+                                            <span class="badge bg-secondary">Not Started</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ paper.uploaded_at|date:"M d, Y" }}</td>
